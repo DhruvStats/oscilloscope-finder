@@ -15,16 +15,18 @@ locally on the CPU — no cloud calls, no downloads at runtime.
 - `tools/` — `draft_real_labels.py` / `finalize_real_labels.py` (labelling), `eval_real.py` (score on real photos),
   `prelabel.py` (Label Studio pre-annotations), `extract_frames.py` (video to frames), `find_duplicates.py`.
 
-## Current result (real held-out photos)
+## Current result (real held-out photos, scored as the app runs: whole photo + tiles, 40% cut-off)
 
-| | renders only | + real cut-outs |
-|---|---|---|
-| correctly found and named | 8/15 | 10/15 |
-| false alarms | 9 | 0 |
-| AP50 | 0.60 | 0.74 |
+14 real photos never used for training (incl. a wide office shot and a far-away bench), 18 instruments:
 
-Weak spot: TDS 2014 fronts are sometimes named TDS 1002 (too few real TDS 2014 photos). More real photos of the
-TDS 2014 front, from other places and distances, is the most valuable next data.
+| model | right scope + right name | wrong name | missed | false alarms |
+|---|---|---|---|---|
+| v2 (renders + real cut-outs) | 10 | 6 | 2 | 1 |
+| **v3 (+ wide scenes, far/rotated scopes, real crops) - deployed** | **14** | 4 | **0** | 1 |
+
+Known weak spots: TDS 2014 fronts still sometimes named TDS 1002; the wall socket next to the ARCADIA
+bench is flagged as a TDS 1002. More real TDS 2014 front photos and socket hard-negatives are the next fixes.
+Reproduce: `.venv/Scripts/python tools/eval_app.py models/deploy/yolox_tiny_osc3.pth`
 
 ## Run
 
