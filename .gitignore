@@ -33,3 +33,7 @@ legacy-yolov8/__pycache__/
 legacy-yolov8/*.pt
 legacy-yolov8/models/
 legacy-yolov8/*.zip
+
+# kept aside, local only
+_archive/
+media/
