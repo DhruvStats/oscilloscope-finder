@@ -51,8 +51,11 @@ DISPLAY_NAMES = {
     "tek_tds1002": "Tektronix TDS 1002",
 }
 COCO_CKPT = os.environ.get("COCO_CKPT", os.path.join(ROOT, "models", "yolox_tiny.pth"))
-TARGET_MIN_CONF = float(os.environ.get("TARGET_MIN_CONF", "0.05"))
-COCO_MIN_CONF = float(os.environ.get("COCO_MIN_CONF", "0.25"))
+# Confidence cut-offs. The model scores every candidate box; below these the boxes are mostly noise
+# (sockets, signs, shadows). Fixed values chosen on the real held-out photos (tools/eval_app.py) so users
+# do not have to tune anything; override with the environment variables if needed.
+TARGET_MIN_CONF = float(os.environ.get("TARGET_MIN_CONF", "0.4"))
+COCO_MIN_CONF = float(os.environ.get("COCO_MIN_CONF", "0.35"))
 TILES = os.environ.get("TILED_DETECTION", "on").lower() not in ("off", "0", "false", "no")
 USE_CONTEXT = os.environ.get("CONTEXT_MODEL", "on").lower() not in ("off", "0", "false", "no")
 MAX_UPLOAD = int(float(os.environ.get("MAX_UPLOAD_MB", "15")) * 1024 * 1024)
@@ -199,6 +202,7 @@ def health():
         "context_inference": "yolox_tiny_coco" if CONTEXT else None,
         "device": "cpu",
         "tiled_detection": TILES,
+        "min_confidence": TARGET_MIN_CONF,
         # Render sets RENDER=true; the page then says photos go to the demo server instead of "runs locally"
         "hosted": bool(os.environ.get("RENDER")),
         "target_checkpoint": os.path.relpath(TARGET.ckpt, ROOT) if TARGET else None,

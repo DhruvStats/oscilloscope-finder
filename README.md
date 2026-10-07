@@ -91,3 +91,41 @@ from the on-premise Leonardo PoC, which must stay on the local network.
 
 Not in the repository (kept local by `.gitignore`): lab photos, datasets, photo-derived textures, training
 checkpoints and the YOLOX source (cloned at build time, pinned to commit `41977848`).
+
+## Labelling with Label Studio
+
+Same approach as the joystick dataset in the Leonardo notes: Label Studio runs locally in its own isolated
+environment (`.labelstudio-venv`, like `uv tool install label-studio`), its database lives in
+`labelstudio/data/` (git-ignored), and photos are served straight from `raw/` - nothing is copied or uploaded.
+
+| File | Purpose |
+|---|---|
+| `labelstudio/labeling_config.xml` | interface: 3 box labels (keys 1/2/3) + photo status + notes |
+| `labelstudio/GUIDELINES.md` | how to tell the three models apart, what to box and what not |
+| `labelstudio/make_tasks.py` | tasks with boxes pre-filled (reviewed boxes, or model proposals for new photos) |
+| `labelstudio/setup_project.py` | creates the project, connects `raw/`, imports the tasks |
+| `labelstudio/import_export.py` | Label Studio JSON export -> `raw/real_labels.json` |
+| `labelstudio/start.ps1` | starts Label Studio on http://localhost:8080 |
+
+```powershell
+# one-time install (already done on this PC)
+python -m venv .labelstudio-venv; .labelstudio-venv\Scripts\python -m pip install label-studio
+
+.\labelstudio\start.ps1                                   # 1. start, sign up locally at http://localhost:8080
+.venv\Scripts\python labelstudio\make_tasks.py --new raw\new_photos   # 2. tasks (+ model boxes for new photos)
+$env:LS_TOKEN = "<Account & Settings > token>"            # 3. create the project
+.labelstudio-venv\Scripts\python labelstudio\setup_project.py
+# 4. label in the browser; then Export > JSON
+.venv\Scripts\python labelstudio\import_export.py C:\path\to\export.json   # 5. back into the dataset
+.venv\Scripts\python synth\gen3.py --per-class 300 --real-labels raw\real_labels.json   # 6. rebuild + retrain
+```
+
+After step 5 do not run `tools/finalize_real_labels.py` again - it would rebuild `real_labels.json` from the
+older draft and overwrite the Label Studio corrections.
+
+## Confidence threshold
+
+The detector gives every candidate box a confidence score; most candidates are noise (sockets, signs,
+shadows) with low scores. One cut-off is therefore required, but it is fixed on the server
+(`TARGET_MIN_CONF`, default 0.4, chosen on the real held-out photos with `tools/eval_app.py`) instead of a
+slider in the page.

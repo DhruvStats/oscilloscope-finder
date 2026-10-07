@@ -1,0 +1,17 @@
+<View>
+  <Header value="Box every one of the three PoC oscilloscopes that is visible (even partly). Leave everything else unboxed."/>
+  <Image name="image" value="$image" zoom="true" zoomControl="true" rotateControl="false"/>
+  <RectangleLabels name="label" toName="image" strokeWidth="3">
+    <Label value="rs_rtb2004" background="#18c27f" hotkey="1"/>
+    <Label value="tek_tds2014" background="#ff8a1f" hotkey="2"/>
+    <Label value="tek_tds1002" background="#d14bd1" hotkey="3"/>
+  </RectangleLabels>
+  <Header value="Photo status" size="5"/>
+  <Choices name="status" toName="image" choice="single" showInline="true">
+    <Choice value="done" hotkey="d"/>
+    <Choice value="no target oscilloscope"/>
+    <Choice value="unsure which model"/>
+    <Choice value="exclude (too blurry / too small)"/>
+  </Choices>
+  <TextArea name="notes" toName="image" placeholder="Notes (optional)" rows="1" maxSubmissions="1"/>
+</View>

@@ -86,8 +86,6 @@
     <div class="panel">
       <div class="row"><label><input type="checkbox" id="focus" checked> Focus on oscilloscopes</label></div>
       <div class="row" id="othersRow"><label><input type="checkbox" id="others" checked> Label other objects</label></div>
-      <div class="row"><span>Oscilloscope threshold</span><span><input type="range" id="tconf" min="0.05" max="0.95" step="0.05" value="0.4"> <span class="val" id="tconfV">0.40</span></span></div>
-      <div class="row" id="oconfRow"><span>Other objects threshold</span><span><input type="range" id="oconf" min="0.25" max="0.95" step="0.05" value="0.35"> <span class="val" id="oconfV">0.35</span></span></div>
       <div class="buttons" style="margin-top:12px">
         <button type="button" id="another">New image</button>
         <button type="button" id="download" disabled>Download labelled image</button>
@@ -130,7 +128,6 @@ async function checkHealth() {
     // the hosted demo runs without the everyday-objects model: hide its controls
     const ctx = !!j.context_inference;
     $('othersRow').style.display = ctx ? '' : 'none';
-    $('oconfRow').style.display = ctx ? '' : 'none';
     if (j.hosted) $('where').textContent = 'Hosted demo: uploaded photos are processed on the demo server and not stored.';
   } catch { h.className = 'bad'; $('healthText').textContent = 'server not reachable'; }
 }
@@ -165,8 +162,9 @@ function overlapOf(a, t) {  // fraction of a covered by t
 function visible() {
   if (!result) return { targets: [], others: [] };
   const all = result.detections.map(norm);
-  const targets = all.filter(d => d.target && d.conf >= +$('tconf').value);
-  let others = $('others').checked ? all.filter(d => !d.target && d.conf >= +$('oconf').value) : [];
+  // the server already dropped low-confidence boxes (one tested cut-off), so show what it returned
+  const targets = all.filter(d => d.target);
+  let others = $('others').checked ? all.filter(d => !d.target) : [];
   // the generic model often calls the scope a "tv" or "microwave": drop those duplicates
   others = others.filter(o => !targets.some(t => overlapOf(o, t) > 0.5));
   return { targets, others };
@@ -219,7 +217,7 @@ function render(targets, others) {
     v.innerHTML = `${targets.length === 1 ? 'Oscilloscope found' : `${targets.length} oscilloscopes found`}<small>${names.join(' · ')}</small>`;
   } else {
     v.className = 'none';
-    v.innerHTML = `No oscilloscope found<small>try lowering the threshold, or a closer / sharper photo</small>`;
+    v.innerHTML = `No oscilloscope found<small>none of the three PoC models is visible clearly enough - try a closer or sharper photo</small>`;
   }
   const items = [...targets.map(d => ({ ...d, c: colourOf(d).fill })), ...others.map(d => ({ ...d, c: css('--other') }))];
   $('list').innerHTML = items.length ? items.map(d =>
@@ -286,9 +284,7 @@ const stage = $('stage');
 ['dragleave', 'drop'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.remove('over'); }));
 stage.addEventListener('drop', e => analyse(e.dataTransfer.files[0]));
 window.addEventListener('paste', e => { const f = [...e.clipboardData.files].find(f => f.type.startsWith('image/')); if (f) analyse(f); });
-['focus', 'others', 'tconf', 'oconf'].forEach(id => $(id).addEventListener('input', () => {
-  $('tconfV').textContent = (+$('tconf').value).toFixed(2); $('oconfV').textContent = (+$('oconf').value).toFixed(2); draw();
-}));
+['focus', 'others'].forEach(id => $(id).addEventListener('input', draw));
 $('download').onclick = () => {
   const a = document.createElement('a');
   a.download = `${fileName}-labelled.jpg`; a.href = canvas.toDataURL('image/jpeg', 0.92); a.click();

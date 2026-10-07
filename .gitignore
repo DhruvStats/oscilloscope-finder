@@ -17,3 +17,8 @@ models/deploy/*
 
 *.log
 .claude/
+
+# Label Studio: isolated environment, local database, generated tasks
+.labelstudio-venv/
+labelstudio/data/
+labelstudio/tasks.json
