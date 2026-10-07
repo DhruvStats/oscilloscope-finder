@@ -13,6 +13,7 @@ Environment (all optional):
   COCO_CKPT                  path of the COCO checkpoint (default models/yolox_tiny.pth)
   TORCH_THREADS              CPU threads for inference (default: half the cores)
   MAX_UPLOAD_MB              reject larger uploads (default 15)
+  TILED_DETECTION=off        only look at the whole photo (faster, but misses small, distant instruments)
   DEMO_PASSWORD              if set, the page and API ask for HTTP basic auth (any user name, this password)
 """
 import base64
@@ -52,6 +53,7 @@ DISPLAY_NAMES = {
 COCO_CKPT = os.environ.get("COCO_CKPT", os.path.join(ROOT, "models", "yolox_tiny.pth"))
 TARGET_MIN_CONF = float(os.environ.get("TARGET_MIN_CONF", "0.05"))
 COCO_MIN_CONF = float(os.environ.get("COCO_MIN_CONF", "0.25"))
+TILES = os.environ.get("TILED_DETECTION", "on").lower() not in ("off", "0", "false", "no")
 USE_CONTEXT = os.environ.get("CONTEXT_MODEL", "on").lower() not in ("off", "0", "false", "no")
 MAX_UPLOAD = int(float(os.environ.get("MAX_UPLOAD_MB", "15")) * 1024 * 1024)
 DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "")
@@ -65,6 +67,41 @@ class Detector:
         self.model = exp.get_model().eval()
         self.model.load_state_dict(torch.load(ckpt, map_location="cpu")["model"])
         self.tf = ValTransform(legacy=False)
+
+    def detect(self, img, min_conf, tiles=True):
+        """Whole image plus overlapping tiles, merged.
+
+        The model sees a 416x416 version of the photo, so a scope that fills 1/8 of a wide room shot
+        shrinks to ~50 px and is missed. Tiles along the long side (and a 2x2 grid for big photos) give
+        small instruments enough pixels; duplicates across tiles are merged afterwards.
+        """
+        dets = self(img, min_conf)
+        h, w = img.shape[:2]
+        if not tiles or max(h, w) < 900:
+            return dets
+        ov = 0.25
+        if w >= h:
+            tw, th = int(w * (0.5 + ov / 2)), h
+        else:
+            tw, th = w, int(h * (0.5 + ov / 2))
+        grid = [(0, 0), (w - tw, h - th)]
+        if min(h, w) >= 1000:   # big photo: 2x2 grid of 62% tiles
+            tw, th = int(w * 0.62), int(h * 0.62)
+            grid = [(0, 0), (w - tw, 0), (0, h - th), (w - tw, h - th)]
+        for x0, y0 in grid:
+            for d in self(img[y0:y0 + th, x0:x0 + tw], min_conf):
+                b = d["bbox"]
+                bx0, by0 = x0 + b["x"] * tw, y0 + b["y"] * th
+                bx1, by1 = bx0 + b["width"] * tw, by0 + b["height"] * th
+                # a box touching a seam inside the photo is a cut-off fragment: the other tile or the
+                # whole-image pass sees that object complete
+                m = 0.02 * max(tw, th)
+                if (bx0 - x0 < m and x0 > 0) or (y0 > 0 and by0 - y0 < m) or \
+                   (x0 + tw < w and x0 + tw - bx1 < m) or (y0 + th < h and y0 + th - by1 < m):
+                    continue
+                dets.append(dict(d, bbox={"x": round(bx0 / w, 5), "y": round(by0 / h, 5),
+                                          "width": round((bx1 - bx0) / w, 5), "height": round((by1 - by0) / h, 5)}))
+        return merge(dets)
 
     @torch.no_grad()
     def __call__(self, img, min_conf):
@@ -89,6 +126,28 @@ class Detector:
                          "width": round((x1 - x0) / w, 5), "height": round((y1 - y0) / h, 5)},
             })
         return dets
+
+
+def merge(dets, iou_thr=0.3, contain_thr=0.5):
+    """One box per object: highest confidence first, drop boxes that overlap or sit inside a kept one."""
+    kept = []
+    for d in sorted(dets, key=lambda d: -d["confidence"]):
+        b = d["bbox"]
+        x0, y0, x1, y1 = b["x"], b["y"], b["x"] + b["width"], b["y"] + b["height"]
+        area = max(1e-9, b["width"] * b["height"])
+        dup = False
+        for k in kept:
+            kb = k["bbox"]
+            ix = max(0, min(x1, kb["x"] + kb["width"]) - max(x0, kb["x"]))
+            iy = max(0, min(y1, kb["y"] + kb["height"]) - max(y0, kb["y"]))
+            inter = ix * iy
+            union = area + kb["width"] * kb["height"] - inter
+            if inter / union > iou_thr or inter / area > contain_thr:
+                dup = True
+                break
+        if not dup:
+            kept.append(d)
+    return kept
 
 
 def load():
@@ -139,6 +198,9 @@ def health():
         "classes": [{"label": n, "display_name": DISPLAY_NAMES.get(n, n)} for n in TARGET.names] if TARGET else [],
         "context_inference": "yolox_tiny_coco" if CONTEXT else None,
         "device": "cpu",
+        "tiled_detection": TILES,
+        # Render sets RENDER=true; the page then says photos go to the demo server instead of "runs locally"
+        "hosted": bool(os.environ.get("RENDER")),
         "target_checkpoint": os.path.relpath(TARGET.ckpt, ROOT) if TARGET else None,
     }
 
@@ -156,7 +218,7 @@ async def recognitions(image: UploadFile = File(...), session_id: str = Form(Non
     if img is None:
         raise HTTPException(400, "image could not be decoded (use JPEG or PNG)")
     t0 = time.perf_counter()
-    targets = TARGET(img, TARGET_MIN_CONF)
+    targets = TARGET.detect(img, TARGET_MIN_CONF, TILES)
     for d in targets:
         d["target"] = True
     context = [dict(d, target=False) for d in CONTEXT(img, COCO_MIN_CONF)] if CONTEXT else []

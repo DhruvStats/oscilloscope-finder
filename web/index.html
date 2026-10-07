@@ -63,7 +63,7 @@
 <body>
 <header>
   <h1>Oscilloscope finder</h1>
-  <span class="sub">Upload a photo of a cluttered bench — the R&amp;S RTB2004, Tektronix TDS 2014 and TDS 1002 are found and labelled. Runs locally, nothing leaves this network.</span>
+  <span class="sub">Upload a photo of a cluttered bench — the R&amp;S RTB2004, Tektronix TDS 2014 and TDS 1002 are found and labelled. <span id="where">Runs locally, nothing leaves this network.</span></span>
   <span id="health"><span class="dot"></span><span id="healthText">checking server…</span></span>
 </header>
 <main>
@@ -85,9 +85,9 @@
     </div>
     <div class="panel">
       <div class="row"><label><input type="checkbox" id="focus" checked> Focus on oscilloscopes</label></div>
-      <div class="row"><label><input type="checkbox" id="others" checked> Label other objects</label></div>
+      <div class="row" id="othersRow"><label><input type="checkbox" id="others" checked> Label other objects</label></div>
       <div class="row"><span>Oscilloscope threshold</span><span><input type="range" id="tconf" min="0.05" max="0.95" step="0.05" value="0.4"> <span class="val" id="tconfV">0.40</span></span></div>
-      <div class="row"><span>Other objects threshold</span><span><input type="range" id="oconf" min="0.25" max="0.95" step="0.05" value="0.35"> <span class="val" id="oconfV">0.35</span></span></div>
+      <div class="row" id="oconfRow"><span>Other objects threshold</span><span><input type="range" id="oconf" min="0.25" max="0.95" step="0.05" value="0.35"> <span class="val" id="oconfV">0.35</span></span></div>
       <div class="buttons" style="margin-top:12px">
         <button type="button" id="another">New image</button>
         <button type="button" id="download" disabled>Download labelled image</button>
@@ -127,6 +127,11 @@ async function checkHealth() {
     const ok = j.status === 'ok';
     h.className = ok ? 'ok' : 'bad';
     $('healthText').textContent = ok ? `${j.inference} · ${j.device}` : (j.inference || 'model unavailable');
+    // the hosted demo runs without the everyday-objects model: hide its controls
+    const ctx = !!j.context_inference;
+    $('othersRow').style.display = ctx ? '' : 'none';
+    $('oconfRow').style.display = ctx ? '' : 'none';
+    if (j.hosted) $('where').textContent = 'Hosted demo: uploaded photos are processed on the demo server and not stored.';
   } catch { h.className = 'bad'; $('healthText').textContent = 'server not reachable'; }
 }
 checkHealth();
