@@ -1,0 +1,10 @@
+.venv
+raw
+datasets
+synth/textures
+web/samples
+models/training
+models/yolox
+models/*.pth
+**/__pycache__
+*.log

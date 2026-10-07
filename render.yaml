@@ -1,0 +1,18 @@
+# Render blueprint: New > Blueprint, pick this repository.
+services:
+  - type: web
+    name: oscilloscope-finder
+    runtime: docker
+    plan: free            # 512 MB RAM; the COCO context model is off to fit. On Standard, set CONTEXT_MODEL=on
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DEMO_PASSWORD   # set it in the Render dashboard to protect the demo; leave empty for open access
+        sync: false
+      - key: CONTEXT_MODEL
+        value: "off"
+      - key: TORCH_THREADS
+        value: "1"
+      - key: MAX_UPLOAD_MB
+        value: "10"

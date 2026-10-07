@@ -1,0 +1,19 @@
+# environment
+.venv/
+__pycache__/
+*.pyc
+
+# lab data: photos, datasets and photo-derived textures stay off GitHub (Leonardo data rules)
+raw/
+datasets/
+synth/textures/
+web/samples/
+
+# models: only the deployable trained weights are versioned
+models/*
+!models/deploy/
+models/deploy/*
+!models/deploy/yolox_tiny_osc3.pth
+
+*.log
+.claude/

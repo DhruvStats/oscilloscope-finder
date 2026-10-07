@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oscilloscope finder</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --panel: #ffffff; --fg: #1d1d1b; --muted: #6b6a66; --line: #e2e1dc;
+    --accent: #0f9d6b; --accent-ink: #ffffff; --accent-soft: #e3f5ee; --warn: #b4581b; --warn-soft: #fbeee4;
+    --other: #5f7a99; --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151514; --panel: #1f1f1d; --fg: #ecebe7; --muted: #9b9a95; --line: #33322f;
+      --accent: #2fc68e; --accent-ink: #06291b; --accent-soft: #163a2c; --warn: #f0a46d; --warn-soft: #3a2616; --other: #8fa7c2; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 20px 24px 8px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  #health { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  #health .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  #health.ok .dot { background: var(--accent); } #health.bad .dot { background: var(--warn); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 8px 24px 24px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 8px 16px 16px; } header { padding: 16px 16px 4px; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  #stage { position: relative; min-height: 420px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #drop { position: absolute; inset: 12px; border: 2px dashed var(--line); border-radius: var(--radius); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px; color: var(--muted); text-align: center; padding: 16px; cursor: pointer; }
+  #drop.over, #stage.over #drop { border-color: var(--accent); background: var(--accent-soft); color: var(--fg); }
+  #drop strong { color: var(--fg); font-size: 16px; }
+  #canvas { max-width: 100%; max-height: 74vh; display: none; }
+  #stage.has-image #drop { display: none; } #stage.has-image #canvas { display: block; }
+  #busy { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: color-mix(in srgb, var(--panel) 60%, transparent); font-weight: 500; }
+  #stage.busy #busy { display: flex; }
+  aside { display: flex; flex-direction: column; gap: 12px; }
+  aside .panel { padding: 14px 16px; }
+  #verdict { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  #verdict.found { color: var(--accent); } #verdict.none { color: var(--warn); }
+  #verdict small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; font-size: 14px; }
+  .row label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  input[type=range] { width: 120px; accent-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+  .val { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 36px; text-align: right; }
+  button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
+  button:disabled { opacity: .45; cursor: default; }
+  .buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+  h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 6px; text-transform: none; }
+  ul { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow: auto; }
+  li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  li:last-child { border-bottom: 0; }
+  li .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 8px; vertical-align: 0; }
+  li.target { font-weight: 600; }
+  .meta { font-size: 12px; color: var(--muted); }
+  details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  details input[type=text] { width: 100%; margin-top: 8px; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
+  .error { color: var(--warn); font-size: 13px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Oscilloscope finder</h1>
+  <span class="sub">Upload a photo of a cluttered bench — the R&amp;S RTB2004, Tektronix TDS 2014 and TDS 1002 are found and labelled. Runs locally, nothing leaves this network.</span>
+  <span id="health"><span class="dot"></span><span id="healthText">checking server…</span></span>
+</header>
+<main>
+  <section id="stage" class="panel">
+    <div id="drop">
+      <strong>Drop a photo here</strong>
+      <span>or click to choose · paste with Ctrl+V · JPEG or PNG</span>
+      <button class="primary" type="button" id="pick">Choose image</button>
+      <div class="buttons" id="samples" style="justify-content:center; margin-top:6px"></div>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div id="busy">Looking for oscilloscopes…</div>
+    <input type="file" id="file" accept="image/*" hidden>
+  </section>
+  <aside>
+    <div class="panel">
+      <div id="verdict">No image yet</div>
+      <div class="error" id="error"></div>
+    </div>
+    <div class="panel">
+      <div class="row"><label><input type="checkbox" id="focus" checked> Focus on oscilloscopes</label></div>
+      <div class="row"><label><input type="checkbox" id="others" checked> Label other objects</label></div>
+      <div class="row"><span>Oscilloscope threshold</span><span><input type="range" id="tconf" min="0.05" max="0.95" step="0.05" value="0.4"> <span class="val" id="tconfV">0.40</span></span></div>
+      <div class="row"><span>Other objects threshold</span><span><input type="range" id="oconf" min="0.25" max="0.95" step="0.05" value="0.35"> <span class="val" id="oconfV">0.35</span></span></div>
+      <div class="buttons" style="margin-top:12px">
+        <button type="button" id="another">New image</button>
+        <button type="button" id="download" disabled>Download labelled image</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Detections</h2>
+      <ul id="list"><li class="meta">—</li></ul>
+      <div class="meta" id="timing"></div>
+    </div>
+    <div class="panel">
+      <details>
+        <summary>Server</summary>
+        <input type="text" id="server" placeholder="same origin (this server)">
+        <div class="meta" style="margin-top:6px">Any server with the Leonardo <code>POST /v1/recognitions</code> contract works, e.g. <code>http://192.168.1.20:8001</code>.</div>
+      </details>
+    </div>
+  </aside>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const canvas = $('canvas'), ctx = canvas.getContext('2d');
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+let img = null, result = null, fileName = 'image';
+
+const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+$('server').value = store.get('server', '');
+$('server').addEventListener('change', () => { store.set('server', $('server').value.trim()); checkHealth(); });
+const base = () => ($('server').value.trim() || '').replace(/\/$/, '');
+
+async function checkHealth() {
+  const h = $('health');
+  try {
+    const r = await fetch(base() + '/health');
+    const j = await r.json();
+    const ok = j.status === 'ok';
+    h.className = ok ? 'ok' : 'bad';
+    $('healthText').textContent = ok ? `${j.inference} · ${j.device}` : (j.inference || 'model unavailable');
+  } catch { h.className = 'bad'; $('healthText').textContent = 'server not reachable'; }
+}
+checkHealth();
+
+// accept the Leonardo contract and a few common variants
+function norm(d) {
+  const b = d.bbox || d.box || {};
+  const label = d.label || d.class_name || d.name || String(d.class_id ?? d.class ?? 'object');
+  const target = d.target ?? /oscillo|rtb|tds|tektronix/i.test(label + ' ' + (d.class_id || ''));
+  return { label, name: d.display_name || label, target, conf: d.confidence ?? d.score ?? 0,
+           x: b.x ?? b[0], y: b.y ?? b[1], w: b.width ?? b.w ?? b[2], h: b.height ?? b.h ?? b[3] };
+}
+
+// one colour per instrument model; unknown target labels fall back to green
+const COLOURS = {
+  rtb: { fill: '#18c27f', ink: '#04291a' },
+  tds2014: { fill: '#ff8a1f', ink: '#3a1c00' },
+  tds1002: { fill: '#d14bd1', ink: '#ffffff' },
+};
+function colourOf(d) {
+  const key = Object.keys(COLOURS).find(k => d.label.toLowerCase().includes(k));
+  return COLOURS[key] || COLOURS.rtb;
+}
+
+function overlapOf(a, t) {  // fraction of a covered by t
+  const ix = Math.max(0, Math.min(a.x + a.w, t.x + t.w) - Math.max(a.x, t.x));
+  const iy = Math.max(0, Math.min(a.y + a.h, t.y + t.h) - Math.max(a.y, t.y));
+  return (ix * iy) / Math.max(1e-6, a.w * a.h);
+}
+
+function visible() {
+  if (!result) return { targets: [], others: [] };
+  const all = result.detections.map(norm);
+  const targets = all.filter(d => d.target && d.conf >= +$('tconf').value);
+  let others = $('others').checked ? all.filter(d => !d.target && d.conf >= +$('oconf').value) : [];
+  // the generic model often calls the scope a "tv" or "microwave": drop those duplicates
+  others = others.filter(o => !targets.some(t => overlapOf(o, t) > 0.5));
+  return { targets, others };
+}
+
+function draw() {
+  if (!img) return;
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+  ctx.drawImage(img, 0, 0);
+  const { targets, others } = visible();
+  const W = canvas.width, H = canvas.height, lw = Math.max(2, Math.round(Math.max(W, H) / 320));
+  const font = Math.max(13, Math.round(Math.max(W, H) / 55));
+  const px = d => [d.x * W, d.y * H, d.w * W, d.h * H];
+
+  if ($('focus').checked && targets.length) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, W, H);
+    targets.forEach(t => { const [x, y, w, h] = px(t); ctx.rect(x + w, y, -w, h); });
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill('evenodd'); ctx.restore();
+  }
+  const tag = (text, x, y, color, ink, size) => {
+    ctx.font = `600 ${size}px system-ui, sans-serif`;
+    const tw = ctx.measureText(text).width + size * 0.8, th = size * 1.5;
+    const ty = y - th < 0 ? y : y - th;
+    ctx.fillStyle = color; ctx.fillRect(x - lw / 2, ty, tw, th);
+    ctx.fillStyle = ink; ctx.fillText(text, x - lw / 2 + size * 0.4, ty + size * 1.08);
+  };
+  const otherColor = css('--other');
+  ctx.globalAlpha = $('focus').checked && targets.length ? 0.55 : 1;
+  others.forEach(o => {
+    const [x, y, w, h] = px(o);
+    ctx.strokeStyle = otherColor; ctx.lineWidth = Math.max(1, lw * 0.6); ctx.strokeRect(x, y, w, h);
+    tag(`${o.label} ${Math.round(o.conf * 100)}%`, x, y, otherColor, '#fff', Math.round(font * 0.8));
+  });
+  ctx.globalAlpha = 1;
+  targets.forEach(t => {
+    const [x, y, w, h] = px(t), c = colourOf(t);
+    ctx.strokeStyle = c.fill; ctx.lineWidth = lw * 2; ctx.strokeRect(x, y, w, h);
+    tag(`${t.name}  ${Math.round(t.conf * 100)}%`, x, y, c.fill, c.ink, font);
+  });
+  render(targets, others);
+}
+
+function render(targets, others) {
+  const v = $('verdict');
+  if (!result) return;
+  if (targets.length) {
+    v.className = 'found';
+    const names = [...new Set(targets.map(t => t.name))];
+    v.innerHTML = `${targets.length === 1 ? 'Oscilloscope found' : `${targets.length} oscilloscopes found`}<small>${names.join(' · ')}</small>`;
+  } else {
+    v.className = 'none';
+    v.innerHTML = `No oscilloscope found<small>try lowering the threshold, or a closer / sharper photo</small>`;
+  }
+  const items = [...targets.map(d => ({ ...d, c: colourOf(d).fill })), ...others.map(d => ({ ...d, c: css('--other') }))];
+  $('list').innerHTML = items.length ? items.map(d =>
+    `<li class="${d.target ? 'target' : ''}"><span><span class="sw" style="background:${d.c}"></span>${d.target ? d.name : d.label}</span><span class="val">${Math.round(d.conf * 100)}%</span></li>`
+  ).join('') : '<li class="meta">nothing above the thresholds</li>';
+  $('timing').textContent = result.inference_ms ? `${result.inference_ms} ms on ${result.device || 'server'} · ${result.image?.width}×${result.image?.height}` : '';
+  $('download').disabled = false;
+}
+
+async function analyse(file) {
+  if (!file || !file.type.startsWith('image/')) { $('error').textContent = 'Please choose an image file.'; return; }
+  $('error').textContent = '';
+  fileName = (file.name || 'image').replace(/\.[^.]+$/, '');
+  const url = URL.createObjectURL(file);
+  img = new Image();
+  await new Promise((ok, bad) => { img.onload = ok; img.onerror = bad; img.src = url; });
+  result = null;
+  $('stage').classList.add('has-image', 'busy');
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
+  $('verdict').className = ''; $('verdict').textContent = 'Analysing…';
+  try {
+    const fd = new FormData();
+    fd.append('image', file, file.name || 'upload.jpg');
+    fd.append('session_id', 'web-ui');
+    fd.append('frame_timestamp_ms', String(Date.now()));
+    const r = await fetch(base() + '/v1/recognitions', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `server answered ${r.status}`);
+    result = await r.json();
+    draw();
+  } catch (e) {
+    $('verdict').className = 'none'; $('verdict').textContent = 'Recognition failed';
+    $('error').textContent = e.message;
+  } finally { $('stage').classList.remove('busy'); }
+}
+
+async function loadSamples() {
+  try {
+    const names = await (await fetch(base() + '/samples')).json();
+    $('samples').innerHTML = names.length ? '<span class="meta" style="width:100%">or try a sample:</span>' : '';
+    names.forEach(n => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = n.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+      b.onclick = async e => {
+        e.stopPropagation();
+        const blob = await (await fetch(base() + '/samples/' + encodeURIComponent(n))).blob();
+        analyse(new File([blob], n, { type: blob.type || 'image/jpeg' }));
+      };
+      $('samples').appendChild(b);
+    });
+  } catch { /* samples are optional */ }
+}
+loadSamples();
+
+$('pick').onclick = e => { e.stopPropagation(); $('file').click(); };
+$('drop').onclick = () => $('file').click();
+$('file').onchange = () => { analyse($('file').files[0]); $('file').value = ''; };
+$('another').onclick = () => {
+  img = null; result = null; $('stage').classList.remove('has-image');
+  $('verdict').className = ''; $('verdict').textContent = 'No image yet';
+  $('list').innerHTML = '<li class="meta">—</li>'; $('timing').textContent = ''; $('download').disabled = true;
+};
+const stage = $('stage');
+['dragenter', 'dragover'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.remove('over'); }));
+stage.addEventListener('drop', e => analyse(e.dataTransfer.files[0]));
+window.addEventListener('paste', e => { const f = [...e.clipboardData.files].find(f => f.type.startsWith('image/')); if (f) analyse(f); });
+['focus', 'others', 'tconf', 'oconf'].forEach(id => $(id).addEventListener('input', () => {
+  $('tconfV').textContent = (+$('tconf').value).toFixed(2); $('oconfV').textContent = (+$('oconf').value).toFixed(2); draw();
+}));
+$('download').onclick = () => {
+  const a = document.createElement('a');
+  a.download = `${fileName}-labelled.jpg`; a.href = canvas.toDataURL('image/jpeg', 0.92); a.click();
+};
+</script>
+</body>
+</html>

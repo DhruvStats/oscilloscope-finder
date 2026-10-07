@@ -1,0 +1,11 @@
+# Runtime dependencies for the hosted demo (PyTorch CPU wheels are installed separately in the Dockerfile).
+fastapi==0.124.4
+uvicorn==0.33.0
+python-multipart
+opencv-python-headless
+numpy
+# imported by the YOLOX 0.3.0 source at inference time
+loguru
+tabulate
+thop
+pycocotools
