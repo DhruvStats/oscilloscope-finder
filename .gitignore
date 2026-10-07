@@ -37,3 +37,7 @@ legacy-yolov8/*.zip
 # kept aside, local only
 _archive/
 media/
+
+# guide PDF and its images contain lab photos: local only (rebuild with docs/build_guide.py)
+docs/img/
+docs/*.pdf
