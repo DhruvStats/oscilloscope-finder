@@ -15,6 +15,19 @@ locally on the CPU — no cloud calls, no downloads at runtime.
 - `tools/` — `draft_real_labels.py` / `finalize_real_labels.py` (labelling), `eval_real.py` (score on real photos),
   `prelabel.py` (Label Studio pre-annotations), `extract_frames.py` (video to frames), `find_duplicates.py`.
 
+## Folder map (C:\Users\WAGH\oscilloscope-detection is the main folder)
+
+| Folder | Content | In git |
+|---|---|---|
+| `server/`, `web/` | detector API + web page | yes |
+| `training/`, `synth/`, `tools/` | training, dataset generator, labelling/eval tools | yes |
+| `labelstudio/` | Label Studio setup (project "PoC oscilloscopes") | yes (not its database) |
+| `models/deploy/` | deployed weights | yes |
+| `raw/`, `datasets/`, `models/training/` | photos, labels, generated datasets, checkpoints | no (lab data) |
+| `legacy-yolov8/` | first YOLOv8 + OCR version | code only |
+| `media/` | 360/3D videos, interactive viewer and the scripts that made them | no |
+| `_archive/` | old copy from karta-ai, kept aside | no |
+
 ## Current result (real held-out photos, scored as the app runs: whole photo + tiles, 40% cut-off)
 
 14 real photos never used for training (incl. a wide office shot and a far-away bench), 18 instruments:
