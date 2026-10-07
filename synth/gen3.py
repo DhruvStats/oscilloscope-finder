@@ -213,6 +213,32 @@ def contact_shadow(canvas, x, y_bottom, w, strength):
     canvas[:] = (canvas.astype(np.float32) * (1 - strength * sh[..., None])).astype(np.uint8)
 
 
+# Small flat objects the model mistook for scopes (v3 false alarms). Taken from TRAIN photos only
+# (photo 25 is a test photo). Pasted small and unlabelled, so the model learns they are not scopes.
+HARD_NEGATIVES = [
+    ('raw/photos/28.jpg', (313, 461, 374, 499)),   # wall socket next to the ARCADIA bench
+    ('raw/photos/23.jpg', (379, 343, 460, 398)),   # "mitlab" sign on the cupboard
+]
+
+
+def load_hard_negatives():
+    out = []
+    for path, (x0, y0, x1, y1) in HARD_NEGATIVES:
+        crop = cv2.imread(os.path.join(ROOT, path))[y0:y1, x0:x1]
+        a = np.zeros(crop.shape[:2], np.uint8)
+        cv2.rectangle(a, (2, 2), (crop.shape[1] - 3, crop.shape[0] - 3), 255, -1)
+        out.append(np.dstack([crop, cv2.GaussianBlur(a, (5, 5), 0)]))
+    return out
+
+
+def place_hard_negative(canvas, hn):
+    w = int(random.uniform(0.03, 0.14) * W)          # as small as they appear in room shots
+    h = max(4, int(hn.shape[0] * w / hn.shape[1]))
+    hn = cv2.resize(hn, (w, h), interpolation=cv2.INTER_AREA)
+    hn = np.dstack([jitter(hn[..., :3], 0.2, 20), hn[..., 3]])
+    return paste(canvas, hn, random.randint(0, W - w), random.randint(0, H - h))
+
+
 def place_distractor(canvas, d):
     s = min(random.uniform(0.15, 0.55) * H, d.shape[0] * 1.3) / d.shape[0]
     d = cv2.resize(d, (max(2, int(d.shape[1] * s)), max(2, int(d.shape[0] * s))), interpolation=cv2.INTER_AREA)
@@ -287,16 +313,20 @@ def object_for(cls, models, cuts, cutout_frac):
     return render_rgba(random.choice(models[cls]), *random_pose())
 
 
-def make_scene(classes, models, distractors, photos, cuts=None, cutout_frac=0.0):
+def make_scene(classes, models, distractors, photos, cuts=None, cutout_frac=0.0, hard_negs=()):
     canvas = random_background(photos)
     for d in random.sample(distractors, random.randint(1, 4)):
         place_distractor(canvas, d)
+    if hard_negs and random.random() < 0.5:
+        for hn in random.sample(list(hard_negs), random.randint(1, len(hard_negs))):
+            place_hard_negative(canvas, hn)
     lo_hi = (0.05, 0.18) if random.random() < 0.3 else (0.18, 0.75)    # 30% of scenes: far away
     px_per_mm = random.uniform(*lo_hi) * W / 390 / max(1, len(classes) * 0.7)
     masks = []          # (class, alpha) in paint order
     random.shuffle(classes)
     for cls in classes:
-        obj = object_for(cls, models, cuts or {}, cutout_frac)
+        frac = min(0.9, cutout_frac + 0.15) if cls == 'tek_tds2014' else cutout_frac   # fewest real photos
+        obj = object_for(cls, models, cuts or {}, frac)
         target_w = REAL_WIDTH_MM[cls] * px_per_mm * random.uniform(0.8, 1.2)
         obj = cv2.resize(obj, (max(8, int(target_w)), max(8, int(obj.shape[0] * target_w / obj.shape[1]))),
                          interpolation=cv2.INTER_AREA)
@@ -377,18 +407,21 @@ def main():
         OCCUPIED[f'real{i}'] = [(b['bbox'][0], b['bbox'][1], b['bbox'][0] + b['bbox'][2], b['bbox'][1] + b['bbox'][3])
                                 for b in it['boxes']]
 
+    hard_negs = load_hard_negatives()
     scenes = []
     count = {c: 0 for c in CLASSES}
-    while min(count.values()) < args.per_class:
+    # TDS 2014 is the class the model confuses most (with the TDS 1002): give it 40% more examples
+    target = {c: int(args.per_class * (1.4 if c == 'tek_tds2014' else 1.0)) for c in CLASSES}
+    while any(count[c] < target[c] for c in CLASSES):
         k = random.choices([1, 2, 3], weights=[0.65, 0.25, 0.10])[0]
-        # favour the classes that are behind
-        pool = sorted(CLASSES, key=lambda c: count[c] + random.random() * 20)[:k]
-        img, anns = make_scene(list(pool), models, distractors, photos, cuts, args.cutout_frac)
+        # favour the classes that are furthest behind their target
+        pool = sorted(CLASSES, key=lambda c: count[c] / target[c] + random.random() * 0.05)[:k]
+        img, anns = make_scene(list(pool), models, distractors, photos, cuts, args.cutout_frac, hard_negs)
         for cls, _ in anns:
             count[cls] += 1
         scenes.append((img, anns))
     for _ in range(int(len(scenes) * args.neg_frac)):
-        scenes.append(make_scene([], models, distractors, photos))
+        scenes.append(make_scene([], models, distractors, photos, hard_negs=hard_negs))
     random.shuffle(scenes)
 
     # the real train photos themselves, resized like the synthetic images
@@ -396,7 +429,8 @@ def main():
         img = it['img']
         h, w = img.shape[:2]
         views = [(0, 0, w, h)]
-        for _ in range(3):      # random crops: same scene at other zoom levels and positions
+        n_crops = 7 if any(b['cls'] == 'tek_tds2014' for b in it['boxes']) else 3   # more of the scarce class
+        for _ in range(n_crops):      # random crops: same scene at other zoom levels and positions
             cw = int(w * random.uniform(0.45, 0.85))
             ch = int(h * random.uniform(0.45, 0.85))
             x0, y0 = random.randint(0, w - cw), random.randint(0, h - ch)
