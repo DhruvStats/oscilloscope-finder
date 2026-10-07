@@ -3,7 +3,8 @@
   - photos already in raw/real_labels.json: their reviewed boxes (model_version "reviewed")
   - any other photos in the folders given with --new: boxes proposed by the trained model ("model")
 
-Images are referenced through Label Studio's local-files storage, rooted at the project's raw/ folder,
+Images are referenced through Label Studio's local-files storage (document root = project folder,
+storage = raw/),
 so nothing is copied or uploaded.
 
     .venv/Scripts/python labelstudio/make_tasks.py [--new raw/new_photos]
@@ -22,7 +23,7 @@ RAW = os.path.join(ROOT, "raw")
 
 
 def url(path):
-    rel = os.path.relpath(os.path.join(ROOT, path), RAW).replace(os.sep, "/")
+    rel = os.path.relpath(os.path.join(ROOT, path), ROOT).replace(os.sep, "/")   # e.g. raw/photos/00.jpg
     return "/data/local-files/?d=" + rel
 
 

@@ -56,19 +56,31 @@ def main():
 
     existing = call("GET", "/api/projects/?page_size=100", auth)
     existing = existing.get("results", existing) if isinstance(existing, dict) else existing
-    if any(p["title"] == TITLE for p in existing):
-        sys.exit(f'a project called "{TITLE}" already exists - delete or rename it first')
-
-    project = call("POST", "/api/projects/", auth, {
+    found = [p for p in existing if p["title"] == TITLE]
+    if found and found[0].get("task_number", 0):
+        sys.exit(f'project "{TITLE}" already has tasks: {URL}/projects/{found[0]["id"]}/data')
+    if found:   # created by an earlier, interrupted run: finish setting it up
+        project = found[0]
+        call("PATCH", f"/api/projects/{project['id']}", auth, {"label_config": config})
+    else:
+        project = None
+    project = project or call("POST", "/api/projects/", auth, {
         "title": TITLE, "label_config": config,
         "description": "Bounding boxes for R&S RTB2004, Tektronix TDS 2014, Tektronix TDS 1002. "
                        "See labelstudio/GUIDELINES.md.",
         "show_collab_predictions": True})
     pid = project["id"]
-    # let Label Studio serve the photos from raw/ (no copies, no uploads)
-    call("POST", "/api/storages/localfiles/", auth, {
-        "project": pid, "title": "lab photos (raw/)", "path": os.path.join(ROOT, "raw"),
-        "use_blob_urls": False, "regex_filter": ""})
+    # let Label Studio serve the photos from raw/ (no copies, no uploads); document root = project folder
+    storages = call("GET", f"/api/storages/localfiles/?project={pid}", auth) or []
+    if not storages:
+        try:
+            call("POST", "/api/storages/localfiles/", auth, {
+                "project": pid, "title": "lab photos (raw/)", "path": os.path.join(ROOT, "raw"),
+                "use_blob_urls": False, "regex_filter": ""})
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="ignore")[:400]
+            sys.exit(f"Label Studio refused the photo folder: {detail}\n"
+                     "Start Label Studio with labelstudio\\start.ps1 (it sets the document root).")
     call("POST", f"/api/projects/{pid}/import", auth, tasks)
     print(f"project {pid} created with {len(tasks)} tasks: {URL}/projects/{pid}/data")
 
