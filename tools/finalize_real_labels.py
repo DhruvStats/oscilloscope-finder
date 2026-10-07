@@ -36,6 +36,11 @@ RECLASS = {"27": "tek_tds2014"}
 TEST = {"02", "49", "61",                  # RTB2004 (front with TDS 2014 edge, hand-held, scene)
         "05", "30", "31", "55",            # TDS 2014 (front, side, back, front)
         "11", "14", "39", "44", "45"}      # TDS 1002 (back, front, front, back with GPIB, side)
+# openly licensed photos from the web (see raw/web/provenance.csv and the dataset ATTRIBUTION.md)
+EXTRA = [
+    {"file": "raw/web/tek_tds1002_85b6e23218.jpg", "session": "web_commons", "view": "front", "split": "train",
+     "boxes": [{"cls": "tek_tds1002", "bbox": [40, 470, 2390, 1150]}]},   # CC BY-SA 2.5, Berserkerus
+]
 COLOURS = {"rs_rtb2004": (0, 200, 90), "tek_tds2014": (0, 140, 255), "tek_tds1002": (210, 75, 210)}
 
 
@@ -70,6 +75,7 @@ def main():
         cv2.putText(t, tag, (3, 278), 0, 0.42, (0, 0, 0), 1)
         tiles.append(t)
 
+    out.extend(EXTRA)
     with open(os.path.join(ROOT, "raw", "real_labels.json"), "w") as f:
         json.dump({"images": out}, f, indent=1)
     while len(tiles) % 9:

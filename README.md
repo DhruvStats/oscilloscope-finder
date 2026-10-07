@@ -73,7 +73,8 @@ PYTHONPATH=models/yolox python models/yolox/tools/train.py -f training/yolox_tin
 
 - YOLOX source: tag `0.3.0`, commit `419778480ab6ec0590e5d3831b3afb3b46ab2aa3` (Apache-2.0).
 - `models/yolox_tiny.pth` SHA-256 `9de513de589ac98bb92d3bca53b5af7b9acfa9b0bacb831f7999d0f7afaee8f0`.
-- Training data: lab phone photos, 3D renders built from them, and Batronix studio images of the RTB2004 —
+- Training data: lab phone photos, 3D renders built from them, Batronix/Datatec studio images of the RTB2004 and
+  one TDS 1002 photo by Berserkerus (Wikimedia Commons, CC BY-SA 2.5) —
   check licences per the Leonardo process before use beyond the PoC.
 
 ## Hosted demo (Render)

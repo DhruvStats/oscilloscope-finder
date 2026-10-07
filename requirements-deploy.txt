@@ -9,3 +9,4 @@ loguru
 tabulate
 thop
 pycocotools
+tqdm
