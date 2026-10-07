@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "oscilloscope-finder",
+      "runtimeExecutable": "C:\Users\WAGH\oscilloscope-detection\.venv\Scripts\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "server.app:app", "--app-dir", "C:\Users\WAGH\oscilloscope-detection", "--host", "127.0.0.1", "--port", "8011"],
+      "port": 8011
+    }
+  ]
+}

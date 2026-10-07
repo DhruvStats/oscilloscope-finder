@@ -30,16 +30,20 @@ def call(method, path, auth, body=None):
 
 def auth_header(token):
     try:
-        call("GET", "/api/projects?page_size=1", f"Token {token}")
+        call("GET", "/api/projects/?page_size=1", f"Token {token}")
         return f"Token {token}"
     except urllib.error.HTTPError as e:
         if e.code != 401:
             raise
     # personal access token: exchange the refresh token for a short-lived access token
-    req = urllib.request.Request(URL + "/api/token/refresh", data=json.dumps({"refresh": token}).encode(),
+    req = urllib.request.Request(URL + "/api/token/refresh/", data=json.dumps({"refresh": token}).encode(),
                                  headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return "Bearer " + json.loads(r.read())["access"]
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return "Bearer " + json.loads(r.read())["access"]
+    except urllib.error.HTTPError as e:
+        sys.exit(f"Label Studio rejected the token (HTTP {e.code}). Copy it again from Account & Settings > "
+                 "Personal Access Token (or create a new one) and set LS_TOKEN in this same window.")
 
 
 def main():
@@ -50,19 +54,19 @@ def main():
     config = open(os.path.join(ROOT, "labelstudio", "labeling_config.xml"), encoding="utf-8").read()
     tasks = json.load(open(os.path.join(ROOT, "labelstudio", "tasks.json")))
 
-    existing = call("GET", "/api/projects?page_size=100", auth)
+    existing = call("GET", "/api/projects/?page_size=100", auth)
     existing = existing.get("results", existing) if isinstance(existing, dict) else existing
     if any(p["title"] == TITLE for p in existing):
         sys.exit(f'a project called "{TITLE}" already exists - delete or rename it first')
 
-    project = call("POST", "/api/projects", auth, {
+    project = call("POST", "/api/projects/", auth, {
         "title": TITLE, "label_config": config,
         "description": "Bounding boxes for R&S RTB2004, Tektronix TDS 2014, Tektronix TDS 1002. "
                        "See labelstudio/GUIDELINES.md.",
         "show_collab_predictions": True})
     pid = project["id"]
     # let Label Studio serve the photos from raw/ (no copies, no uploads)
-    call("POST", "/api/storages/localfiles", auth, {
+    call("POST", "/api/storages/localfiles/", auth, {
         "project": pid, "title": "lab photos (raw/)", "path": os.path.join(ROOT, "raw"),
         "use_blob_urls": False, "regex_filter": ""})
     call("POST", f"/api/projects/{pid}/import", auth, tasks)

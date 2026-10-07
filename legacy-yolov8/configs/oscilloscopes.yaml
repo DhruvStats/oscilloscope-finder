@@ -1,0 +1,30 @@
+# One entry per oscilloscope model the detector should recognise.
+# To add a new brand/model: add an entry here, then re-run
+#   python scripts/prepare_dataset.py
+#
+#   name           class name used by YOLO (no spaces)
+#   brand          shown in the app / result file
+#   model          printed model number, used to correct OCR output
+#   source         dataset folder (COCO layout: images/<split>2017 + annotations/instances_<split>2017.json)
+#   coco_category  category name inside that dataset's annotation JSON
+#   real_photos    optional list of Label Studio exports (Export -> COCO, unzipped) of your own
+#                  photos; they are added to the 80/20 train/val pool
+
+classes:
+  - name: rs_rtb2004
+    brand: Rohde & Schwarz
+    model: RTB2004
+    source: C:/Users/WAGH/Downloads/dataset-rtb2004/dataset-rtb2004
+    coco_category: rtb2004
+    # real_photos:
+    #   - C:/Users/WAGH/Downloads/labelstudio-rtb2004
+
+  # - name: rigol_ds1054z
+  #   brand: Rigol
+  #   model: DS1054Z
+  #   source: C:/Users/WAGH/Downloads/dataset-ds1054z
+  #   coco_category: ds1054z
+
+split:
+  train_fraction: 0.8   # 80% train / 20% validation, taken from the synthetic images
+  seed: 42              # fixed so the split is reproducible

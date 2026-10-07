@@ -16,9 +16,20 @@ models/deploy/*
 !models/deploy/yolox_tiny_osc3.pth
 
 *.log
-.claude/
+
 
 # Label Studio: isolated environment, local database, generated tasks
 .labelstudio-venv/
 labelstudio/data/
 labelstudio/tasks.json
+.claude/settings.local.json
+labelstudio/labelstudio.log
+
+# earlier YOLOv8 + OCR version: code is versioned, its data, weights and outputs are not
+legacy-yolov8/data/
+legacy-yolov8/runs/
+legacy-yolov8/outputs/
+legacy-yolov8/__pycache__/
+legacy-yolov8/*.pt
+legacy-yolov8/models/
+legacy-yolov8/*.zip
