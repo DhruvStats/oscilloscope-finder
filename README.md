@@ -80,7 +80,8 @@ PYTHONPATH=models/yolox python models/yolox/tools/train.py -f training/yolox_tin
 ## Hosted demo (Render)
 
 The repository contains a `Dockerfile` and a `render.yaml` blueprint. In Render: **New > Blueprint**, select this
-repository, set `DEMO_PASSWORD` when asked (recommended), and deploy. The free plan (512 MB) runs the 3-oscilloscope
+repository and deploy. The demo is open (no password); to protect it, add a `DEMO_PASSWORD` environment
+variable in the Render dashboard. The free plan (512 MB) runs the 3-oscilloscope
 model only (`CONTEXT_MODEL=off`, about 350 MB in use); on Standard or larger, set `CONTEXT_MODEL=on` and build with
 `WITH_CONTEXT=1` to also label everyday objects. The free plan sleeps when idle, so the first request after a pause
 takes about a minute.

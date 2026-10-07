@@ -16,7 +16,7 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 NEGATIVES = {"00", "01", "03"}
-EXCLUDE = {"15", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "28"}
+EXCLUDE = {"15"}
 MANUAL = {
     "02": [("rs_rtb2004", (150, 30, 1325, 650)), ("tek_tds2014", (1300, 195, 1600, 605))],
     "08": [("tek_tds1002", (0, 108, 651, 1485))],
@@ -31,9 +31,27 @@ MANUAL = {
     "46": [("tek_tds1002", (109, 500, 651, 1271))],
     "55": [("tek_tds2014", (328, 99, 1341, 614)), ("rs_rtb2004", (1512, 54, 1600, 454))],
 }
+# Wide office / bench scenes, boxed by hand on 2026-10-08. The Tektronix in the office session (17-26) shows
+# coloured channel buttons and 5 BNC inputs: it is the TDS 2014 (the model had called it TDS 1002).
+# The ARCADIA bench (25, 28) is the TDS 1002. The wall socket in 25/28 and the "mitlab" sign in 23 stay
+# unlabelled on purpose: they were false alarms and now act as hard negatives.
+MANUAL.update({
+    "17": [("rs_rtb2004", (177, 108, 525, 746)), ("tek_tds2014", (186, 696, 437, 1246))],
+    "18": [("rs_rtb2004", (255, 185, 570, 765)), ("tek_tds2014", (140, 740, 445, 1320))],
+    "19": [("tek_tds2014", (97, 329, 308, 500)), ("rs_rtb2004", (315, 264, 447, 446))],
+    "20": [("rs_rtb2004", (466, 398, 698, 545)), ("tek_tds2014", (710, 440, 911, 557))],
+    "21": [("rs_rtb2004", (294, 722, 577, 1075)), ("tek_tds2014", (568, 759, 717, 932))],
+    "22": [("rs_rtb2004", (193, 794, 625, 1040)), ("tek_tds2014", (643, 896, 717, 1096))],
+    "23": [("tek_tds2014", (179, 768, 290, 939)), ("rs_rtb2004", (251, 700, 347, 836))],
+    "24": [("rs_rtb2004", (171, 329, 616, 590)), ("tek_tds2014", (651, 407, 996, 603))],
+    "25": [("tek_tds1002", (685, 340, 864, 428))],
+    "26": [("tek_tds2014", (80, 858, 449, 1080)), ("rs_rtb2004", (0, 787, 59, 1045))],
+    "28": [("tek_tds1002", (664, 298, 840, 378))],
+})
 # the box is right but the model's class was not: the white-table session is the TDS 2014
 RECLASS = {"27": "tek_tds2014"}
-TEST = {"02", "49", "61",                  # RTB2004 (front with TDS 2014 edge, hand-held, scene)
+TEST = {"20", "25",                       # user's screenshots: wide office, far ARCADIA bench
+        "02", "49", "61",                  # RTB2004 (front with TDS 2014 edge, hand-held, scene)
         "05", "30", "31", "55",            # TDS 2014 (front, side, back, front)
         "11", "14", "39", "44", "45"}      # TDS 1002 (back, front, front, back with GPIB, side)
 # openly licensed photos from the web (see raw/web/provenance.csv and the dataset ATTRIBUTION.md)

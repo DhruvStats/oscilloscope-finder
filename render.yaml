@@ -8,8 +8,6 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     envVars:
-      - key: DEMO_PASSWORD   # set it in the Render dashboard to protect the demo; leave empty for open access
-        sync: false
       - key: CONTEXT_MODEL
         value: "off"
       - key: TORCH_THREADS

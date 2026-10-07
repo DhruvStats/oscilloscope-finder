@@ -146,7 +146,10 @@ def random_pose():
         pitch = np.radians(random.uniform(-6, 6))
     else:
         pitch = np.radians(random.uniform(40, 75))
-    return yaw, pitch, np.radians(random.gauss(0, 5))
+    roll = random.gauss(0, 5)
+    if random.random() < 0.12:              # lying on its side
+        roll = random.choice([-1, 1]) * random.uniform(60, 110)
+    return yaw, pitch, np.radians(roll)
 
 
 def jitter(img, contrast, bright):
@@ -271,9 +274,14 @@ def object_for(cls, models, cuts, cutout_frac):
         c = random.choice(cuts[cls])
         # real photo of a real scope: never mirror (text and layout would be wrong), only tilt slightly
         ang = random.uniform(-4, 4)
+        if random.random() < 0.15:          # instrument lying on its side / photo taken sideways
+            ang = random.choice([-1, 1]) * random.uniform(60, 110)
         h, w = c.shape[:2]
+        side = int(np.hypot(h, w)) + 2
         M = cv2.getRotationMatrix2D((w / 2, h / 2), ang, 1)
-        c = cv2.warpAffine(c, M, (w, h), flags=cv2.INTER_LINEAR, borderValue=(0, 0, 0, 0))
+        M[0, 2] += (side - w) / 2
+        M[1, 2] += (side - h) / 2
+        c = cv2.warpAffine(c, M, (side, side), flags=cv2.INTER_LINEAR, borderValue=(0, 0, 0, 0))
         ys, xs = np.where(c[..., 3] > 128)
         return c[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
     return render_rgba(random.choice(models[cls]), *random_pose())
@@ -283,7 +291,8 @@ def make_scene(classes, models, distractors, photos, cuts=None, cutout_frac=0.0)
     canvas = random_background(photos)
     for d in random.sample(distractors, random.randint(1, 4)):
         place_distractor(canvas, d)
-    px_per_mm = random.uniform(0.18, 0.75) * W / 390 / max(1, len(classes) * 0.7)
+    lo_hi = (0.05, 0.18) if random.random() < 0.3 else (0.18, 0.75)    # 30% of scenes: far away
+    px_per_mm = random.uniform(*lo_hi) * W / 390 / max(1, len(classes) * 0.7)
     masks = []          # (class, alpha) in paint order
     random.shuffle(classes)
     for cls in classes:
@@ -385,9 +394,32 @@ def main():
     # the real train photos themselves, resized like the synthetic images
     for it in real_train:
         img = it['img']
-        s = 640 / max(img.shape[:2])
-        small = cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
-        scenes.append((small, [(b['cls'], [round(v * s) for v in b['bbox']]) for b in it['boxes']]))
+        h, w = img.shape[:2]
+        views = [(0, 0, w, h)]
+        for _ in range(3):      # random crops: same scene at other zoom levels and positions
+            cw = int(w * random.uniform(0.45, 0.85))
+            ch = int(h * random.uniform(0.45, 0.85))
+            x0, y0 = random.randint(0, w - cw), random.randint(0, h - ch)
+            views.append((x0, y0, x0 + cw, y0 + ch))
+        for x0, y0, x1, y1 in views:
+            anns = []
+            for b in it['boxes']:
+                bx, by, bw, bh = b['bbox']
+                ix0, iy0 = max(bx, x0), max(by, y0)
+                ix1, iy1 = min(bx + bw, x1), min(by + bh, y1)
+                if ix1 <= ix0 or iy1 <= iy0:
+                    continue
+                vis = (ix1 - ix0) * (iy1 - iy0) / max(1, bw * bh)
+                if vis < 0.35:
+                    anns = None     # crop cuts a scope down to a sliver: ambiguous, skip this view
+                    break
+                anns.append((b['cls'], [ix0 - x0, iy0 - y0, ix1 - ix0, iy1 - iy0]))
+            if anns is None:
+                continue
+            crop = img[y0:y1, x0:x1]
+            s = 640 / max(crop.shape[:2])
+            small = cv2.resize(crop, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+            scenes.append((small, [(c, [round(v * s) for v in bb]) for c, bb in anns]))
     random.shuffle(scenes)
 
     if os.path.exists(args.out):
