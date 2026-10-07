@@ -384,7 +384,7 @@ def write_split(out, split, items):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--per-class', type=int, default=200)
-    ap.add_argument('--val-frac', type=float, default=0.15)
+    ap.add_argument('--val-frac', type=float, default=0.2)   # 80/20 train/validation
     ap.add_argument('--neg-frac', type=float, default=0.1)
     ap.add_argument('--out', default=os.path.join(ROOT, 'datasets', 'oscilloscopes3'))
     ap.add_argument('--seed', type=int, default=2026)

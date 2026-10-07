@@ -9,7 +9,8 @@ locally on the CPU — no cloud calls, no downloads at runtime.
   It runs two YOLOX-Tiny models: the fine-tuned 3-oscilloscope model (target) and the stock COCO model (context).
 - `training/yolox_tiny_osc3.py` — YOLOX experiment (3 classes, 416×416); `yolox_tiny_rtb2004.py` is the earlier 1-class one.
 - `training/train_cpu.py` — CPU fine-tuning loop (the official YOLOX trainer needs CUDA).
-- `datasets/oscilloscopes3/` — 3-class COCO dataset (`synth/gen3.py`): 3D renders + real cut-outs pasted on
+- `datasets/oscilloscopes3/` — 3-class COCO dataset (`synth/gen3.py`, 80/20 train/validation split of the
+  generated + real-crop images): 3D renders + real cut-outs pasted on
   bench scenes + 40 real train photos; `test2017` = 12 real photos never used for training.
 - `raw/` — the lab photos, `photos_manifest.csv` (instrument + session per photo), `real_labels.json` (checked boxes).
 - `tools/` — `draft_real_labels.py` / `finalize_real_labels.py` (labelling), `eval_real.py` (score on real photos),
