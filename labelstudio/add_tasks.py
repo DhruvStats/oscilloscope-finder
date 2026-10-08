@@ -1,6 +1,7 @@
 """Add new tasks (e.g. captured frames or new photos) to the existing "PoC oscilloscopes" project.
 
     .venv/Scripts/python labelstudio/make_tasks.py --new raw/captures/2026-10-08 --only-new
+    .venv/Scripts/python labelstudio/make_tasks.py --only-new --labelled raw/batch_2026-10-08   (reviewed batch)
     $env:LS_TOKEN = "<your token>"
     .labelstudio-venv/Scripts/python labelstudio/add_tasks.py
 
@@ -31,8 +32,19 @@ def main():
     if not found:
         sys.exit(f'project "{TITLE}" not found - create it with setup_project.py')
     pid = found[0]["id"]
-    call("POST", f"/api/projects/{pid}/import", auth, tasks)
-    print(f"added {len(tasks)} tasks: {URL}/projects/{pid}/data")
+    # skip photos that are already in the project (safe to run twice)
+    existing, page = set(), 1
+    while True:
+        r = call("GET", f"/api/tasks/?project={pid}&page={page}&page_size=500", auth)
+        batch = r.get("tasks", r) if isinstance(r, dict) else r
+        existing |= {t["data"].get("file") for t in batch}
+        if len(batch) < 500:
+            break
+        page += 1
+    todo = [t for t in tasks if t["data"]["file"] not in existing]
+    if todo:
+        call("POST", f"/api/projects/{pid}/import", auth, todo)
+    print(f"added {len(todo)} tasks ({len(tasks) - len(todo)} already there): {URL}/projects/{pid}/data")
 
 
 if __name__ == "__main__":
