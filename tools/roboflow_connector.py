@@ -121,13 +121,28 @@ def cmd_push(a):
     proj = ws.project(PROJECT) if PROJECT in names else ws.create_project(
         PROJECT, "object-detection", "private", "oscilloscope")
     classes = os.path.join(DS, "yolo", "data.yaml")
+    batch = "real_labelled" if a.what == "labelled" else "oscilloscopes3"
+    ok, failed = 0, []
     for i, (split, img, lab) in enumerate(files, 1):
-        # the SDK reads YOLO .txt labels together with the class names from data.yaml
-        proj.upload(img, annotation_path=lab, split=split if split != "val" else "valid",
-                    batch_name="real_labelled" if a.what == "labelled" else "oscilloscopes3", num_retry_uploads=2, annotation_labelmap=classes)
-        if i % 50 == 0:
-            print(f"  {i}/{len(files)}")
-    print(f"uploaded {len(files)} images to {proj.id}")
+        rf_split = split if split != "val" else "valid"
+        empty = not os.path.exists(lab) or not open(lab).read().strip()
+        try:
+            if empty:
+                # no oscilloscope in this photo: Roboflow rejects an empty annotation, so send the image only
+                proj.upload(img, split=rf_split, batch_name=batch, num_retry_uploads=2,
+                            tag_names=["no-oscilloscope"])
+            else:
+                # the SDK reads YOLO .txt labels together with the class names from data.yaml
+                proj.upload(img, annotation_path=lab, split=rf_split, batch_name=batch, num_retry_uploads=2,
+                            annotation_labelmap=classes)
+            ok += 1
+        except Exception as e:  # keep going; report at the end (re-running is safe, duplicates are skipped)
+            failed.append((os.path.relpath(img, ROOT), str(e)[:120]))
+        if i % 25 == 0:
+            print(f"  {i}/{len(files)}  ok {ok}  failed {len(failed)}", flush=True)
+    print(f"uploaded {ok}/{len(files)} images to {proj.id}")
+    for f, e in failed[:20]:
+        print("  FAILED", f, "-", e)
 
 
 def cmd_pull(a):
