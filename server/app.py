@@ -14,6 +14,9 @@ Environment (all optional):
   TORCH_THREADS              CPU threads for inference (default: half the cores)
   MAX_UPLOAD_MB              reject larger uploads (default 15)
   TILED_DETECTION=off        only look at the whole photo (faster, but misses small, distant instruments)
+  LABEL_MODE=models          name the exact model instead of just "oscilloscope" (default: generic)
+  TEK_CHECK=off              skip the second-stage TDS 2014 / TDS 1002 classifier (models/deploy/tek_classifier.pth)
+  TEK_MIN_CONF               classifier confidence needed to (re)name a Tektronix (default 0.6)
   CONTEXT_TILES=off          everyday objects from the whole photo only (faster)
   DEMO_PASSWORD              if set, the page and API ask for HTTP basic auth (any user name, this password)
   CAPTURE_MODE=on            lab server only: store unsure frames from opted-in clients and reported photos
@@ -201,7 +204,75 @@ def load():
     return target, context
 
 
+class TekClassifier:
+    """Second stage: re-checks every Tektronix box on a full-resolution crop (TDS 2014 vs TDS 1002).
+
+    The two models share one case; only the front (buttons, inputs) or the back module tells them apart, which
+    the detector sees at 416 px only. When the classifier is not sure (e.g. a side or top view), the answer
+    keeps the detector's name but says so ("model_certain": false) instead of being confidently wrong.
+    """
+
+    def __init__(self, path):
+        import torchvision
+        ck = torch.load(path, map_location="cpu")
+        self.classes, self.size = ck["classes"], ck["size"]
+        self.mean = np.array(ck["mean"], np.float32)
+        self.std = np.array(ck["std"], np.float32)
+        m = torchvision.models.mobilenet_v3_small(weights=None)
+        m.classifier[3] = torch.nn.Linear(m.classifier[3].in_features, len(self.classes))
+        m.load_state_dict(ck["model"])
+        self.model = m.eval()
+
+    @torch.no_grad()
+    def __call__(self, img, bbox):
+        H, W = img.shape[:2]
+        x, y, w, h = bbox["x"] * W, bbox["y"] * H, bbox["width"] * W, bbox["height"] * H
+        x0, y0 = max(0, int(x - 0.1 * w)), max(0, int(y - 0.1 * h))
+        x1, y1 = min(W, int(x + 1.1 * w)), min(H, int(y + 1.1 * h))
+        crop = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2RGB)
+        if crop.size == 0:
+            return None, 0.0
+        s = self.size / max(crop.shape[:2])
+        crop = cv2.resize(crop, (max(1, int(crop.shape[1] * s)), max(1, int(crop.shape[0] * s))),
+                          interpolation=cv2.INTER_AREA if s < 1 else cv2.INTER_LINEAR)
+        pad = np.full((self.size, self.size, 3), 114, np.uint8)
+        oy, ox = (self.size - crop.shape[0]) // 2, (self.size - crop.shape[1]) // 2
+        pad[oy:oy + crop.shape[0], ox:ox + crop.shape[1]] = crop
+        x = (pad.astype(np.float32) / 255 - self.mean) / self.std
+        p = torch.softmax(self.model(torch.from_numpy(x.transpose(2, 0, 1)).unsqueeze(0)), 1)[0]
+        k = int(p.argmax())
+        return self.classes[k], float(p[k])
+
+
+def apply_tek_check(img, dets):
+    """Second-stage naming for Tektronix boxes (in place)."""
+    if TEK is None:
+        return
+    for d in dets:
+        if not d["label"].startswith("tek_"):
+            continue
+        cls, p = TEK(img, d["bbox"])
+        if cls is None:
+            continue
+        d["first_stage_label"] = d["label"]
+        d["model_check"] = {"label": cls, "confidence": round(p, 3)}
+        if p >= TEK_MIN_CONF:
+            d["label"], d["display_name"] = cls, DISPLAY_NAMES.get(cls, cls)
+            d["class_id"] = d["class_id"].split(":")[0] + ":" + str(TARGET.names.index(cls))
+            d["model_certain"] = True
+        else:
+            d["model_certain"] = False
+            d["display_name"] = DISPLAY_NAMES.get(d["label"], d["label"]) + " (model unclear)"
+
+
 TARGET, CONTEXT = load()
+TEK_PATH = os.environ.get("TEK_CLASSIFIER", os.path.join(ROOT, "models", "deploy", "tek_classifier.pth"))
+TEK_MIN_CONF = float(os.environ.get("TEK_MIN_CONF", "0.6"))
+# LABEL_MODE=generic (default): every target is answered as "oscilloscope" - the reliable part today
+# (86-89% found on real test photos vs ~60% with the exact model). The model guess stays in "model_hint".
+# LABEL_MODE=models: answer with the exact model (rs_rtb2004 / tek_tds2014 / tek_tds1002).
+LABEL_MODE = os.environ.get("LABEL_MODE", "generic").lower()
+TEK = TekClassifier(TEK_PATH) if TARGET and os.path.exists(TEK_PATH) and     os.environ.get("TEK_CHECK", "on").lower() not in ("off", "0", "false", "no") else None
 app = FastAPI(title="Leonardo AR - oscilloscope finder")
 
 
@@ -228,11 +299,15 @@ def health():
         "status": "ok" if TARGET else "degraded",
         "recognition_mode": "real",
         "inference": f"yolox_tiny_{TARGET.prefix}" if TARGET else "unavailable",
-        "classes": [{"label": n, "display_name": DISPLAY_NAMES.get(n, n), "colour": COLOURS.get(n, "#18c27f")}
-                    for n in TARGET.names] if TARGET else [],
+        "label_mode": LABEL_MODE,
+        "classes": ([{"label": "oscilloscope", "display_name": "Oscilloscope", "colour": "#18c27f"}]
+                    if LABEL_MODE == "generic" else
+                    [{"label": n, "display_name": DISPLAY_NAMES.get(n, n), "colour": COLOURS.get(n, "#18c27f")}
+                     for n in TARGET.names]) if TARGET else [],
         "context_inference": "yolox_tiny_coco" if CONTEXT else None,
         "device": "cpu",
         "tiled_detection": TILES,
+        "tektronix_check": bool(TEK),
         "capture": CAPTURE,
         "min_confidence": TARGET_MIN_CONF,
         # Render sets RENDER=true; the page then says photos go to the demo server instead of "runs locally"
@@ -273,6 +348,12 @@ async def recognitions(image: UploadFile = File(...), session_id: str = Form(Non
     # detect down to the "unsure" level, answer only with confident boxes
     candidates = TARGET.detect(img, min(TARGET_MIN_CONF, UNSURE_RANGE[0]), TILES)
     targets = [d for d in candidates if d["confidence"] >= TARGET_MIN_CONF]
+    if LABEL_MODE == "generic":
+        for d in targets:
+            d["model_hint"] = {"label": d["label"], "display_name": d["display_name"]}
+            d["label"], d["display_name"], d["class_id"] = "oscilloscope", "Oscilloscope", "target:oscilloscope"
+    else:
+        apply_tek_check(img, targets)
     for d in targets:
         d["target"] = True
     captured = None

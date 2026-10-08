@@ -23,13 +23,19 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("ckpt")
     ap.add_argument("--conf", type=float, default=0.4)
+    ap.add_argument("--no-tek", action="store_true", help="score without the second-stage Tektronix check")
+    ap.add_argument("--generic", action="store_true",
+                    help="only 'is it an oscilloscope?': any target box at the right place counts, the model name is ignored")
     args = ap.parse_args()
     os.environ["TARGET_CKPT"] = os.path.abspath(args.ckpt)
     os.environ["TARGET_EXP"] = "yolox_tiny_osc3"
     os.environ["CONTEXT_MODEL"] = "off"
+    if args.no_tek:
+        os.environ["TEK_CHECK"] = "off"
     sys.path.insert(0, os.path.join(ROOT, "server"))
     import cv2
-    from app import TARGET
+    from app import TARGET, TEK, apply_tek_check
+    print("second-stage Tektronix check:", "on" if TEK else "off")
 
     d = os.path.join(ROOT, "datasets", "oscilloscopes3")
     gt = json.load(open(os.path.join(d, "annotations", "instances_test2017.json")))
@@ -39,9 +45,9 @@ def main():
         img = cv2.imread(os.path.join(d, "test2017", im["file_name"]))
         h, w = img.shape[:2]
         preds = []
-        for p in TARGET.detect(img, 0.05):
-            if p["confidence"] < args.conf:
-                continue
+        dets = [d for d in TARGET.detect(img, 0.05) if d["confidence"] >= args.conf]
+        apply_tek_check(img, dets)
+        for p in dets:
             b = p["bbox"]
             preds.append(([b["x"] * w, b["y"] * h, (b["x"] + b["width"]) * w, (b["y"] + b["height"]) * h], p["label"]))
         used, line = set(), []
@@ -52,7 +58,7 @@ def main():
             best = max(cand, default=(0, -1))
             if best[0] >= 0.4:
                 used.add(best[1])
-                if preds[best[1]][1] == truth:
+                if args.generic or preds[best[1]][1] == truth:
                     right += 1
                     line.append(f"{truth[4:]} ok")
                 else:

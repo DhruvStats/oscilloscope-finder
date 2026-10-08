@@ -25,7 +25,8 @@ namespace LeonardoAR
     public class Detection
     {
         public string class_id;
-        public string label;          // rs_rtb2004 | tek_tds2014 | tek_tds1002 (targets), COCO names otherwise
+        public string label;          // "oscilloscope" (server LABEL_MODE=generic, default) or rs_rtb2004 /
+                                      // tek_tds2014 / tek_tds1002 (LABEL_MODE=models); COCO names otherwise
         public string display_name;
         public float confidence;
         public BBox bbox;
@@ -47,7 +48,7 @@ namespace LeonardoAR
     [Serializable]
     public class ModuleBinding
     {
-        public string label = "rs_rtb2004";
+        public string label = "oscilloscope";   // or rs_rtb2004 / tek_tds2014 / tek_tds1002 in models mode
         public GameObject arModule;   // AR content to enable when this instrument is recognised
     }
 

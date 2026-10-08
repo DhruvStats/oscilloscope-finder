@@ -30,6 +30,12 @@ locally on the CPU — no cloud calls, no downloads at runtime.
 | `media/` | 360/3D videos, interactive viewer and the scripts that made them | no |
 | `_archive/` | old copy from karta-ai, kept aside | no |
 
+## Mode: "oscilloscope" (default) or exact model
+
+`LABEL_MODE=generic` (default) answers every target as **Oscilloscope** - on the 23 real test images 30/35
+found at 40% (31/35 at 30%), 0 naming errors. The detector's model guess is kept in `model_hint`.
+`LABEL_MODE=models` names RTB2004 / TDS 2014 / TDS 1002 (plus the second-stage Tektronix check), ~60% right.
+
 ## Current result (real held-out images, scored as the app runs: whole photo + tiles, 40% cut-off)
 
 | model | test set | right | wrong name | missed | false alarms |
