@@ -199,6 +199,9 @@ def cmd_eval(a):
         return
     ws = workspace(key)
     model = ws.project(PROJECT).version(a.version).model
+    if model is None:
+        sys.exit(f"version {a.version} has no trained model yet - train it first (train --version {a.version}) and wait "
+                 "until the status is 'finished'.")
     coco = json.load(open(os.path.join(DS, "annotations", "instances_test2017.json")))
     names = {c["id"]: c["name"] for c in coco["categories"]}
     right = wrong = missed = false = 0
