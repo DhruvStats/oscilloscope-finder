@@ -41,3 +41,6 @@ media/
 # guide PDF and its images contain lab photos: local only (rebuild with docs/build_guide.py)
 docs/img/
 docs/*.pdf
+
+# packaged bundles (contain the dataset)
+dist/

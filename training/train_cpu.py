@@ -1,4 +1,4 @@
-"""CPU fine-tuning of YOLOX-Tiny for machines without CUDA.
+"""Fine-tuning of YOLOX-Tiny on the CPU, or on an NVIDIA GPU when one is present (--device auto).
 
 The official YOLOX trainer requires CUDA. This loop uses the same Exp, data
 pipeline (mosaic, flips, HSV), loss and LR schedule, but runs on the CPU and
@@ -39,7 +39,10 @@ def evaluate(model, exp, split="val", conf=0.01):
             img = cv2.imread(os.path.join(exp.data_dir, f"{split}2017", info["file_name"]))
             ratio = min(exp.test_size[0] / img.shape[0], exp.test_size[1] / img.shape[1])
             x, _ = tf(img, None, exp.test_size)
-            out = postprocess(model(torch.from_numpy(x).unsqueeze(0).float()), exp.num_classes, conf, exp.nmsthre)[0]
+            dev = next(model.parameters()).device
+            out = postprocess(model(torch.from_numpy(x).unsqueeze(0).float().to(dev)), exp.num_classes, conf,
+                              exp.nmsthre)[0]
+            out = out.cpu() if out is not None else None
             if out is None:
                 continue
             for x0, y0, x1, y1, obj, cls_conf, cls in out.numpy():
@@ -65,6 +68,7 @@ def main():
     ap.add_argument("--epochs", type=int, default=None)
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--threads", type=int, default=os.cpu_count())
+    ap.add_argument("--device", default="auto", help="auto (GPU if available), cpu or cuda")
     ap.add_argument("--exp", default="yolox_tiny_rtb2004", help="experiment module in training/")
     ap.add_argument("--init", default=os.path.join(ROOT, "models", "yolox_tiny.pth"),
                     help="starting weights; layers whose shape differs (the class head) are skipped")
@@ -80,7 +84,10 @@ def main():
     model = exp.get_model()
     ckpt = torch.load(args.init, map_location="cpu")
     load_ckpt(model, ckpt["model"])   # backbone/neck; head layers with a different class count are skipped
-    model.train()
+    device = "cuda" if args.device == "auto" and torch.cuda.is_available() else (
+        "cpu" if args.device == "auto" else args.device)
+    model.to(device).train()
+    print(f"training on {device}" + (f" ({torch.cuda.get_device_name(0)})" if device == "cuda" else ""), flush=True)
 
     loader = exp.get_data_loader(args.batch, is_distributed=False, no_aug=False)
     iters_per_epoch = int(np.ceil(len(exp.dataset) / args.batch))
@@ -100,7 +107,7 @@ def main():
         losses = []
         for i in range(iters_per_epoch):
             inps, targets, _, _ = next(it)
-            inps, targets = inps.float(), targets.float()
+            inps, targets = inps.float().to(device), targets.float().to(device)
             targets.requires_grad = False
             out = model(inps, targets)
             optimizer.zero_grad()
