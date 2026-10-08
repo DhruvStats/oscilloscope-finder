@@ -26,9 +26,16 @@ TEX = os.path.join(HERE, 'textures')
 SESSION = os.path.join(ROOT, 'raw', 'rtb_session')
 W, H = 640, 480
 
-CLASSES = ['rs_rtb2004', 'tek_tds2014', 'tek_tds1002']
-REAL_WIDTH_MM = {'rs_rtb2004': 390, 'tek_tds2014': 326, 'tek_tds1002': 324}
-FACES = ['front', 'back', 'left', 'right', 'top', 'bottom']
+import sys  # noqa: E402
+sys.path.insert(0, ROOT)
+from config import registry  # noqa: E402
+
+# instruments, sizes, weights and 3D textures come from config/instruments.yaml
+INSTRUMENTS = registry.load()
+CLASSES = [it['label'] for it in INSTRUMENTS]
+REAL_WIDTH_MM = {it['label']: it['width_mm'] for it in INSTRUMENTS}
+WEIGHT = {it['label']: float(it['sample_weight']) for it in INSTRUMENTS}
+FACES = list(registry.FACES)
 
 # scopes visible in the session photos: never use these areas as background or clutter
 OCCUPIED = {
@@ -60,13 +67,15 @@ def load_models():
     def face(name):
         return cv2.imread(os.path.join(TEX, name + '.png'), cv2.IMREAD_UNCHANGED)
 
-    models = {'rs_rtb2004': [], 'tek_tds2014': [], 'tek_tds1002': []}
-    for variant in ('rtb_studio', 'rtb_photo'):
-        models['rs_rtb2004'].append({f: face(f'{variant}_{f}') for f in FACES})
-    shared = {f: face(f'tek_{f}') for f in FACES if f != 'front'}
-    models['tek_tds2014'].append(dict(shared, front=face('tek_tds2014_front')))
-    models['tek_tds1002'].append(dict(shared, front=face('tek_tds1002_front'), back=face('tek_tds1002_back'),
-                                      top=face('tek_tds1002_top')))
+    models = {}
+    for it in INSTRUMENTS:
+        models[it['label']] = []
+        for variant in it['textures']:
+            tex = {f: face(variant[f]) for f in FACES}
+            missing = [variant[f] for f in FACES if tex[f] is None]
+            if missing:
+                raise FileNotFoundError(f"{it['label']}: textures not found in synth/textures: {missing}")
+            models[it['label']].append(tex)
     return models
 
 
@@ -296,6 +305,10 @@ def real_cutouts(items):
 
 
 def object_for(cls, models, cuts, cutout_frac):
+    if not models.get(cls):     # instrument without 3D textures: real cut-outs only
+        if not cuts.get(cls):
+            raise ValueError(f"{cls}: no 3D textures and no labelled real photos to cut out - label some photos first")
+        cutout_frac = 1.0
     if cuts.get(cls) and random.random() < cutout_frac:
         c = random.choice(cuts[cls])
         # real photo of a real scope: never mirror (text and layout would be wrong), only tilt slightly
@@ -325,7 +338,7 @@ def make_scene(classes, models, distractors, photos, cuts=None, cutout_frac=0.0,
     masks = []          # (class, alpha) in paint order
     random.shuffle(classes)
     for cls in classes:
-        frac = min(0.9, cutout_frac + 0.15) if cls == 'tek_tds2014' else cutout_frac   # fewest real photos
+        frac = min(0.9, cutout_frac + 0.15) if WEIGHT[cls] > 1 else cutout_frac   # hard / scarce instruments
         obj = object_for(cls, models, cuts or {}, frac)
         target_w = REAL_WIDTH_MM[cls] * px_per_mm * random.uniform(0.8, 1.2)
         obj = cv2.resize(obj, (max(8, int(target_w)), max(8, int(obj.shape[0] * target_w / obj.shape[1]))),
@@ -411,7 +424,7 @@ def main():
     scenes = []
     count = {c: 0 for c in CLASSES}
     # TDS 2014 is the class the model confuses most (with the TDS 1002): give it 40% more examples
-    target = {c: int(args.per_class * (1.4 if c == 'tek_tds2014' else 1.0)) for c in CLASSES}
+    target = {c: int(args.per_class * WEIGHT[c]) for c in CLASSES}   # sample_weight in instruments.yaml
     while any(count[c] < target[c] for c in CLASSES):
         k = random.choices([1, 2, 3], weights=[0.65, 0.25, 0.10])[0]
         # favour the classes that are furthest behind their target
@@ -429,7 +442,7 @@ def main():
         img = it['img']
         h, w = img.shape[:2]
         views = [(0, 0, w, h)]
-        n_crops = 7 if any(b['cls'] == 'tek_tds2014' for b in it['boxes']) else 3   # more of the scarce class
+        n_crops = 7 if any(WEIGHT.get(b['cls'], 1) > 1 for b in it['boxes']) else 3   # more of the scarce class
         for _ in range(n_crops):      # random crops: same scene at other zoom levels and positions
             cw = int(w * random.uniform(0.45, 0.85))
             ch = int(h * random.uniform(0.45, 0.85))
@@ -468,7 +481,7 @@ def main():
                  + '_' + os.path.basename(it['file'])) for it in real_test]
         print('test (real photos)', *write_split(args.out, 'test', test))
 
-    colours = {'rs_rtb2004': (0, 200, 90), 'tek_tds2014': (0, 140, 255), 'tek_tds1002': (255, 80, 200)}
+    colours = {it['label']: tuple(int(it['colour'][i:i + 2], 16) for i in (5, 3, 1)) for it in INSTRUMENTS}  # BGR
     tiles = []
     for img, anns, _ in named[n_val:n_val + 24]:
         t = img.copy()

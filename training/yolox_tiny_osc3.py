@@ -1,9 +1,12 @@
-"""YOLOX-Tiny experiment: three oscilloscopes (rs_rtb2004, tek_tds2014, tek_tds1002)."""
+"""YOLOX-Tiny experiment for the instruments in config/instruments.yaml (currently three oscilloscopes)."""
 import os
+import sys
 
 from yolox.exp import Exp as BaseExp
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+from config import registry  # noqa: E402
 
 
 class Exp(BaseExp):
@@ -18,7 +21,7 @@ class Exp(BaseExp):
         self.enable_mixup = False
         self.multiscale_range = 0
 
-        self.num_classes = 3
+        self.num_classes = len(registry.labels())   # order = model output order
         self.data_dir = os.path.join(ROOT, "datasets", "oscilloscopes3")
         self.train_ann = "instances_train2017.json"
         self.val_ann = "instances_val2017.json"

@@ -10,3 +10,4 @@ tabulate
 thop
 pycocotools
 tqdm
+pyyaml

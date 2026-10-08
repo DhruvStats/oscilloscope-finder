@@ -25,6 +25,7 @@ RUN if [ "$WITH_CONTEXT" = "1" ]; then \
     fi
 
 COPY server ./server
+COPY config/instruments.yaml config/registry.py config/__init__.py ./config/
 COPY training/yolox_tiny_osc3.py training/yolox_tiny_rtb2004.py ./training/
 COPY web/index.html ./web/index.html
 COPY models/deploy ./models/deploy

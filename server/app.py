@@ -41,16 +41,18 @@ from yolox.utils import postprocess  # noqa: E402
 
 import importlib  # noqa: E402
 
+sys.path.insert(0, ROOT)
+from config import registry  # noqa: E402
+
+# instrument names, display names and colours: config/instruments.yaml (order = model output order)
+INSTRUMENTS = registry.load()
+DISPLAY_NAMES = {it["label"]: it["display_name"] for it in INSTRUMENTS}
+COLOURS = {it["label"]: it["colour"] for it in INSTRUMENTS}
 # first available wins; override with TARGET_EXP / TARGET_CKPT
 TARGET_MODELS = [
-    ("yolox_tiny_osc3", ["rs_rtb2004", "tek_tds2014", "tek_tds1002"]),
+    ("yolox_tiny_osc3", [it["label"] for it in INSTRUMENTS]),
     ("yolox_tiny_rtb2004", ["rs_rtb2004"]),
 ]
-DISPLAY_NAMES = {
-    "rs_rtb2004": "R&S RTB2004",
-    "tek_tds2014": "Tektronix TDS 2014",
-    "tek_tds1002": "Tektronix TDS 1002",
-}
 COCO_CKPT = os.environ.get("COCO_CKPT", os.path.join(ROOT, "models", "yolox_tiny.pth"))
 # Confidence cut-offs. The model scores every candidate box; below these the boxes are mostly noise
 # (sockets, signs, shadows). Fixed values chosen on the real held-out photos (tools/eval_app.py) so users
@@ -217,7 +219,8 @@ def health():
         "status": "ok" if TARGET else "degraded",
         "recognition_mode": "real",
         "inference": f"yolox_tiny_{TARGET.prefix}" if TARGET else "unavailable",
-        "classes": [{"label": n, "display_name": DISPLAY_NAMES.get(n, n)} for n in TARGET.names] if TARGET else [],
+        "classes": [{"label": n, "display_name": DISPLAY_NAMES.get(n, n), "colour": COLOURS.get(n, "#18c27f")}
+                    for n in TARGET.names] if TARGET else [],
         "context_inference": "yolox_tiny_coco" if CONTEXT else None,
         "device": "cpu",
         "tiled_detection": TILES,

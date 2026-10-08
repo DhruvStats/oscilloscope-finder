@@ -123,6 +123,7 @@ async function checkHealth() {
     const r = await fetch(base() + '/health');
     const j = await r.json();
     const ok = j.status === 'ok';
+    CLASS_COLOURS = Object.fromEntries((j.classes || []).map(c => [c.label, c.colour || '#18c27f']));
     h.className = ok ? 'ok' : 'bad';
     $('healthText').textContent = ok ? `${j.inference} · ${j.device}` : (j.inference || 'model unavailable');
     // the hosted demo runs without the everyday-objects model: hide its controls
@@ -142,15 +143,15 @@ function norm(d) {
            x: b.x ?? b[0], y: b.y ?? b[1], w: b.width ?? b.w ?? b[2], h: b.height ?? b.h ?? b[3] };
 }
 
-// one colour per instrument model; unknown target labels fall back to green
-const COLOURS = {
-  rtb: { fill: '#18c27f', ink: '#04291a' },
-  tds2014: { fill: '#ff8a1f', ink: '#3a1c00' },
-  tds1002: { fill: '#d14bd1', ink: '#ffffff' },
-};
+// one colour per instrument, from the server's instrument registry (GET /health -> classes[].colour)
+let CLASS_COLOURS = {};
+function inkFor(hex) {   // dark or white text, whichever reads better on the colour
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#1d1d1b' : '#ffffff';
+}
 function colourOf(d) {
-  const key = Object.keys(COLOURS).find(k => d.label.toLowerCase().includes(k));
-  return COLOURS[key] || COLOURS.rtb;
+  const fill = CLASS_COLOURS[d.label] || '#18c27f';
+  return { fill, ink: inkFor(fill) };
 }
 
 function overlapOf(a, t) {  // fraction of a covered by t

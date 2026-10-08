@@ -1,0 +1,49 @@
+# Instrument registry - the single list of things the detector recognises.
+#
+# Everything reads this file: the server (names, colours), the web page (via /health), the dataset
+# generator (sizes, weights, 3D textures), the training experiment (number of classes) and the Label Studio
+# labelling interface (tools/registry_sync.py writes labelstudio/labeling_config.xml from it).
+#
+# The ORDER is the model's output order (class 0, 1, 2, ...). Adding, removing or reordering instruments
+# needs a new dataset build and a retraining; until then keep the list as the deployed model was trained.
+#
+# Adding an instrument:
+#   1. add an entry below (label: lowercase_with_underscores)
+#   2. photograph it (front, back, sides, top, in scenes) into raw/new_photos/<label>/
+#   3. python tools/registry_sync.py   -> updates the Label Studio interface
+#   4. label the photos in Label Studio, export, import (labelstudio/import_export.py)
+#   5. rebuild the dataset (synth/gen3.py) and retrain (training/train_cpu.py, GPU used if present)
+#   3D textures are optional: without them the generator uses cut-outs of the real photos only.
+
+instruments:
+  - label: rs_rtb2004
+    display_name: R&S RTB2004
+    colour: "#18c27f"
+    width_mm: 390            # real width, keeps relative sizes right when several are pasted together
+    sample_weight: 1.0       # >1 = more training examples (for instruments that are hard to recognise)
+    hints: light grey/blue case, large touchscreen, blue hexagon grille at the back
+    textures:                # 3D box models: face -> texture file in synth/textures (without .png)
+      - {front: rtb_studio_front, back: rtb_studio_back, left: rtb_studio_left, right: rtb_studio_right,
+         top: rtb_studio_top, bottom: rtb_studio_bottom}
+      - {front: rtb_photo_front, back: rtb_photo_back, left: rtb_photo_left, right: rtb_photo_right,
+         top: rtb_photo_top, bottom: rtb_photo_bottom}
+
+  - label: tek_tds2014
+    display_name: Tektronix TDS 2014
+    colour: "#ff8a1f"
+    width_mm: 326
+    sample_weight: 1.4       # confused most often with the TDS 1002, and has the fewest real photos
+    hints: teal case; front has coloured channel buttons (yellow/blue/pink/green, red MATH) and 5 BNC inputs
+    textures:
+      - {front: tek_tds2014_front, back: tek_back, left: tek_left, right: tek_right, top: tek_top,
+         bottom: tek_bottom}
+
+  - label: tek_tds1002
+    display_name: Tektronix TDS 1002
+    colour: "#d14bd1"
+    width_mm: 324
+    sample_weight: 1.0
+    hints: same teal case; grey front buttons, 3 BNC inputs; back has the RS232/Centronics/GPIB module
+    textures:
+      - {front: tek_tds1002_front, back: tek_tds1002_back, left: tek_left, right: tek_right,
+         top: tek_tds1002_top, bottom: tek_bottom}

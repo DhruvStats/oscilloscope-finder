@@ -15,7 +15,10 @@ import shutil
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CLASSES = {"rs_rtb2004", "tek_tds2014", "tek_tds1002"}
+sys.path.insert(0, ROOT)
+from config import registry  # noqa: E402
+
+CLASSES = set(registry.labels())
 
 
 def main():

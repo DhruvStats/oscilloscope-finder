@@ -1,5 +1,5 @@
 <View>
-  <Header value="Box every one of the three PoC oscilloscopes that is visible (even partly). Leave everything else unboxed."/>
+  <Header value="Box every one of the target instruments that is visible (even partly). Leave everything else unboxed."/>
   <Image name="image" value="$image" zoom="true" zoomControl="true" rotateControl="false"/>
   <RectangleLabels name="label" toName="image" strokeWidth="3">
     <Label value="rs_rtb2004" background="#18c27f" hotkey="1"/>
