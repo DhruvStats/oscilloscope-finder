@@ -14,6 +14,7 @@ models/*
 !models/deploy/
 models/deploy/*
 !models/deploy/yolox_tiny_osc3.pth
+!models/deploy/tek_classifier.pth
 
 *.log
 

@@ -348,12 +348,11 @@ async def recognitions(image: UploadFile = File(...), session_id: str = Form(Non
     # detect down to the "unsure" level, answer only with confident boxes
     candidates = TARGET.detect(img, min(TARGET_MIN_CONF, UNSURE_RANGE[0]), TILES)
     targets = [d for d in candidates if d["confidence"] >= TARGET_MIN_CONF]
+    apply_tek_check(img, targets)          # better model names (also used for the hint in generic mode)
     if LABEL_MODE == "generic":
         for d in targets:
             d["model_hint"] = {"label": d["label"], "display_name": d["display_name"]}
             d["label"], d["display_name"], d["class_id"] = "oscilloscope", "Oscilloscope", "target:oscilloscope"
-    else:
-        apply_tek_check(img, targets)
     for d in targets:
         d["target"] = True
     captured = None
