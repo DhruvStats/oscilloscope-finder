@@ -51,14 +51,39 @@ FORCE = {  # (image id, candidate) -> class, kept whatever the confidence (low-c
     (264, 0): T02, (220, 0): T02, (266, 0): T02, (221, 1): T02, (265, 0): T02, (265, 1): T02,
 }
 UNION = {71: (1, 2)}   # one instrument split into two boxes -> merge
-TEST_EVERY = 4         # v00: every 4th frame -> test, others left out
+TEST_EVERY = 1         # v00 (unseen lab): every frame -> test (hand-checked, see TEST_FIX)
 # v00 test frames checked by hand (exact boxes; the leg false-positive in 000324 removed, missed scopes added)
 TEST_FIX = {
     "v00_000038": [(R, 6, 340, 266, 510), (T14, 314, 404, 392, 495)],
     "v00_000073": [(R, 0, 347, 251, 508), (T14, 297, 407, 392, 509)],
     "v00_000285": [(R, 65, 353, 163, 397), (T14, 196, 373, 267, 419)],
     "v00_000324": [(R, 35, 326, 132, 361), (T14, 159, 336, 238, 370)],
+    # 2026-10-09: read from 3x zoomed grids (raw/review); small TDS 2014 next to the RTB2004 in the wide shots
+    "v00_000278": [(R, 79, 354, 176, 410), (T14, 209, 372, 288, 416)],
+    "v00_000334": [(R, 29, 326, 122, 384), (T14, 152, 346, 234, 384)],
+    "v00_000345": [(R, 26, 336, 123, 395), (T14, 152, 357, 229, 392)],
+    "v00_000390": [(R, 33, 306, 132, 362), (T14, 158, 324, 238, 362)],
 }
+TEST_ADD = {   # boxes added to the rule-based labels of these test frames
+    "v00_000223": [(T14, 355, 425, 392, 520)], "v00_000237": [(T14, 336, 375, 392, 470)],
+    "v00_000317": [(T14, 161, 346, 246, 384)], "v00_000362": [(T14, 149, 316, 223, 354)],
+    "v00_000369": [(T14, 152, 314, 228, 357)], "v00_000380": [(T14, 152, 318, 229, 356)],
+    "v00_000404": [(T14, 158, 309, 240, 351)],
+}
+KEEP_NARROW = {"v00_000188"}   # real RTB2004 side at the frame edge
+
+
+def clean_test_boxes(key, boxes):
+    """Remove rule-based false boxes in the unseen-lab test frames: a person's legs at the left edge
+    (tall, narrow) and small things on the shelves above the bench."""
+    out = []
+    for b in boxes:
+        x, y, w, h = b["bbox"]
+        legs = x < 60 and h > 2.5 * w and key not in KEEP_NARROW
+        shelf = y + h < 330 and w * h < 4000
+        if not (legs or shelf):
+            out.append(b)
+    return out
 
 
 def teal_vs_beige(img, box):
@@ -154,6 +179,9 @@ def main():
         img = cv2.imread(os.path.join(ROOT, f))
         boxes = [{"cls": c, "bbox": [b[0], b[1], b[2] - b[0], b[3] - b[1]]} for c, b, _ in video_boxes(it, img)]
         key = os.path.splitext(os.path.basename(f))[0]
+        if split == "test":
+            boxes = clean_test_boxes(key, boxes) + [{"cls": c, "bbox": [x0, y0, x1 - x0, y1 - y0]}
+                                                    for c, x0, y0, x1, y1 in TEST_ADD.get(key, [])]
         if key in TEST_FIX:
             boxes = [{"cls": c, "bbox": [x0, y0, x1 - x0, y1 - y0]} for c, x0, y0, x1, y1 in TEST_FIX[key]]
         new.append({"file": f, "session": f"batch_2026-10-08_{vid}", "view": "", "split": split, "boxes": boxes})

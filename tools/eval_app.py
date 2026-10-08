@@ -41,6 +41,8 @@ def main():
     gt = json.load(open(os.path.join(d, "annotations", "instances_test2017.json")))
     names = {c["id"]: c["name"] for c in gt["categories"]}
     right = wrong = missed = false = 0
+    near = {"right": 0, "wrong": 0, "missed": 0}     # use case: scope covers >= NEAR_FRAC of the image
+    NEAR_FRAC = 0.03
     for im in gt["images"]:
         img = cv2.imread(os.path.join(d, "test2017", im["file_name"]))
         h, w = img.shape[:2]
@@ -54,24 +56,32 @@ def main():
         for a in [a for a in gt["annotations"] if a["image_id"] == im["id"]]:
             x, y, bw, bh = a["bbox"]
             box, truth = [x, y, x + bw, y + bh], names[a["category_id"]]
+            is_near = bw * bh >= NEAR_FRAC * w * h
             cand = [(iou(box, p[0]), i) for i, p in enumerate(preds) if i not in used]
             best = max(cand, default=(0, -1))
             if best[0] >= 0.4:
                 used.add(best[1])
                 if args.generic or preds[best[1]][1] == truth:
                     right += 1
+                    near["right"] += is_near
                     line.append(f"{truth[4:]} ok")
                 else:
                     wrong += 1
+                    near["wrong"] += is_near
                     line.append(f"{truth[4:]} as {preds[best[1]][1][4:]}")
             else:
                 missed += 1
+                near["missed"] += is_near
                 line.append(f"{truth[4:]} MISSED")
         fa = len(preds) - len(used)
         false += fa
         print(f"{im['file_name']:<26} {', '.join(line)}{f'  +{fa} false alarm(s)' if fa else ''}")
     total = right + wrong + missed
     print(f"\nright {right}/{total}   wrong name {wrong}   missed {missed}   false alarms {false}")
+    nt = sum(near.values())
+    if nt:
+        print(f"use case (scope >= {NEAR_FRAC:.0%} of the image): right {near['right']}/{nt} "
+              f"({near['right'] / nt:.0%})   wrong name {near['wrong']}   missed {near['missed']}")
 
 
 if __name__ == "__main__":

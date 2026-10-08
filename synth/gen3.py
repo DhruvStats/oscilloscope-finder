@@ -231,9 +231,16 @@ HARD_NEGATIVES = [
 
 
 def load_hard_negatives():
+    """Fixed look-alikes plus every crop in synth/hard_negatives/neg/ (tools/mine_false_positives.py +
+    tools/add_mined_labels.py: speakers, keyboards, posters, whiteboard, floor tape, paper ...)."""
+    crops = [cv2.imread(os.path.join(ROOT, path))[y0:y1, x0:x1] for path, (x0, y0, x1, y1) in HARD_NEGATIVES]
+    neg_dir = os.path.join(HERE, 'hard_negatives', 'neg')
+    if os.path.isdir(neg_dir):
+        crops += [cv2.imread(os.path.join(neg_dir, f)) for f in sorted(os.listdir(neg_dir)) if f.endswith('.jpg')]
     out = []
-    for path, (x0, y0, x1, y1) in HARD_NEGATIVES:
-        crop = cv2.imread(os.path.join(ROOT, path))[y0:y1, x0:x1]
+    for crop in crops:
+        if crop is None or min(crop.shape[:2]) < 8:
+            continue
         a = np.zeros(crop.shape[:2], np.uint8)
         cv2.rectangle(a, (2, 2), (crop.shape[1] - 3, crop.shape[0] - 3), 255, -1)
         out.append(np.dstack([crop, cv2.GaussianBlur(a, (5, 5), 0)]))
@@ -241,7 +248,8 @@ def load_hard_negatives():
 
 
 def place_hard_negative(canvas, hn):
-    w = int(random.uniform(0.03, 0.14) * W)          # as small as they appear in room shots
+    # small (room shots) up to large (a speaker right next to the scope)
+    w = int(random.uniform(0.03, 0.14) * W) if random.random() < 0.4 else int(random.uniform(0.12, 0.45) * W)
     h = max(4, int(hn.shape[0] * w / hn.shape[1]))
     hn = cv2.resize(hn, (w, h), interpolation=cv2.INTER_AREA)
     hn = np.dstack([jitter(hn[..., :3], 0.2, 20), hn[..., 3]])
@@ -278,9 +286,32 @@ def load_real(path):
     """real_labels.json: {"images": [{"file", "session", "split": "train"|"test", "boxes": [{"cls", "bbox": [x,y,w,h]}]}]}"""
     with open(path) as f:
         items = json.load(f)['images']
+    # scopes found later by hard-negative mining (tools/add_mined_labels.py)
+    add_path = os.path.join(ROOT, 'raw', 'label_additions.json')
+    adds = json.load(open(add_path)) if os.path.exists(add_path) else {}
     for it in items:
+        it['boxes'] = it['boxes'] + [{'cls': b['cls'], 'bbox': b['bbox']} for b in adds.get(it['file'], [])]
         it['img'] = cv2.imread(os.path.join(ROOT, it['file']))
     return items
+
+
+def assign_real_val(items, frac):
+    """Hold out real train images for choosing the model: the last `frac` of each video's frames (one block,
+    so neighbouring frames do not leak) and every n-th photo of each photo session."""
+    by_session = {}
+    for it in items:
+        if it['split'] == 'train':
+            by_session.setdefault(it.get('session', ''), []).append(it)
+    for sess, group in by_session.items():
+        group.sort(key=lambda it: it['file'])
+        if '_v0' in sess:                          # video frames: one contiguous block at the end
+            for it in group[int(len(group) * (1 - frac)):]:
+                it['split'] = 'val'
+        else:
+            step = max(2, round(1 / frac))
+            for it in group[step - 1::step]:
+                it['split'] = 'val'
+
 
 
 def real_cutouts(items):
@@ -330,8 +361,8 @@ def make_scene(classes, models, distractors, photos, cuts=None, cutout_frac=0.0,
     canvas = random_background(photos)
     for d in random.sample(distractors, random.randint(1, 4)):
         place_distractor(canvas, d)
-    if hard_negs and random.random() < 0.5:
-        for hn in random.sample(list(hard_negs), random.randint(1, len(hard_negs))):
+    if hard_negs and random.random() < 0.7:
+        for hn in random.sample(list(hard_negs), random.randint(1, min(4, len(hard_negs)))):
             place_hard_negative(canvas, hn)
     lo_hi = (0.05, 0.18) if random.random() < 0.3 else (0.18, 0.75)    # 30% of scenes: far away
     px_per_mm = random.uniform(*lo_hi) * W / 390 / max(1, len(classes) * 0.7)
@@ -403,6 +434,8 @@ def main():
     ap.add_argument('--seed', type=int, default=2026)
     ap.add_argument('--real-labels', default=None, help='checked boxes on the real photos (see load_real)')
     ap.add_argument('--cutout-frac', type=float, default=0.6, help='share of pasted scopes taken from real photos')
+    ap.add_argument('--real-val-frac', type=float, default=0.12,
+                    help='share of real train images held out (unaltered) in val2017 for choosing the model')
     args = ap.parse_args()
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -411,6 +444,9 @@ def main():
     distractors = [grabcut(photos[n], r) for n, r in DISTRACTORS]
     models = load_models()
     real = load_real(args.real_labels) if args.real_labels else []
+    if real and args.real_val_frac > 0:
+        assign_real_val(real, args.real_val_frac)
+    real_val = [it for it in real if it['split'] == 'val']
     real_train = [it for it in real if it['split'] == 'train']
     real_test = [it for it in real if it['split'] == 'test']
     cuts = real_cutouts(real_train)
@@ -475,7 +511,9 @@ def main():
     n_val = int(len(scenes) * args.val_frac)
     named = [(img, anns, f'syn3_{i:05d}.jpg') for i, (img, anns) in enumerate(scenes, 1)]
     print('train', *write_split(args.out, 'train', named[n_val:]))
-    print('val', *write_split(args.out, 'val', named[:n_val]))
+    val_items = named[:n_val] + [(it['img'], [(b['cls'], b['bbox']) for b in it['boxes']],
+                                  'realval_' + it['file'].replace('/', '_').replace('raw_', '', 1)) for it in real_val]
+    print('val (generated + %d real)' % len(real_val), *write_split(args.out, 'val', val_items))
     if real_test:
         test = [(it['img'], [(b['cls'], b['bbox']) for b in it['boxes']], 'real_' + os.path.basename(os.path.dirname(it['file']))
                  + '_' + os.path.basename(it['file'])) for it in real_test]
