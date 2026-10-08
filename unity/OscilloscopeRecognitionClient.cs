@@ -67,6 +67,9 @@ namespace LeonardoAR
         public int maxResultAgeMs = 1500;
         [Tooltip("Accept simulated results (server in RECOGNITION_MODE=simulated). Keep off in real use.")]
         public bool acceptSimulated = false;
+        [Tooltip("Learning from real use: let the lab server keep frames where the model is unsure, for labelling. " +
+                 "Only has an effect if the server runs with CAPTURE_MODE=on. Off by default (frames are not stored).")]
+        public bool contributeUnsureFrames = false;
 
         [Header("Camera source (optional)")]
         public WebCamTexture webcam;
@@ -152,6 +155,7 @@ namespace LeonardoAR
                 new MultipartFormDataSection("session_id", sessionId),
                 new MultipartFormDataSection("frame_timestamp_ms", ts.ToString()),
             };
+            if (contributeUnsureFrames) form.Add(new MultipartFormDataSection("capture", "true"));
             using (var req = UnityWebRequest.Post(serverUrl.TrimEnd('/') + "/v1/recognitions", form))
             {
                 req.timeout = 10;

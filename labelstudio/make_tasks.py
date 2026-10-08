@@ -40,10 +40,12 @@ def region(i, cls, x, y, w, h, W, H, score=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--new", nargs="*", default=[], help="folders under raw/ with photos not labelled yet")
+    ap.add_argument("--only-new", action="store_true",
+                    help="write only the --new photos (to add them to an existing project with add_tasks.py)")
     args = ap.parse_args()
     tasks = []
 
-    labels = json.load(open(os.path.join(RAW, "real_labels.json")))["images"]
+    labels = [] if args.only_new else json.load(open(os.path.join(RAW, "real_labels.json")))["images"]
     for it in labels:
         if not it["file"].startswith("raw/"):
             continue
@@ -73,7 +75,7 @@ def main():
                                        "split": "train", "view": ""},
                               "predictions": [{"model_version": "model", "result": regions}]})
 
-    out = os.path.join(ROOT, "labelstudio", "tasks.json")
+    out = os.path.join(ROOT, "labelstudio", "tasks_new.json" if args.only_new else "tasks.json")
     with open(out, "w") as f:
         json.dump(tasks, f, indent=1)
     print(f"{len(tasks)} tasks -> {os.path.relpath(out, ROOT)}")

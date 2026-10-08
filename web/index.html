@@ -86,9 +86,11 @@
     <div class="panel">
       <div class="row"><label><input type="checkbox" id="focus" checked> Focus on oscilloscopes</label></div>
       <div class="row" id="othersRow"><label><input type="checkbox" id="others" checked> Label other objects</label></div>
+      <div class="row" id="captureRow" style="display:none"><label title="When the model is unsure, the photo is saved on the lab server so a person can label it and the next model learns from it."><input type="checkbox" id="consent"> Help improve: save unsure photos for labelling</label></div>
       <div class="buttons" style="margin-top:12px">
         <button type="button" id="another">New image</button>
         <button type="button" id="download" disabled>Download labelled image</button>
+        <button type="button" id="report" disabled style="display:none">Report wrong result</button>
       </div>
     </div>
     <div class="panel">
@@ -129,6 +131,9 @@ async function checkHealth() {
     // the hosted demo runs without the everyday-objects model: hide its controls
     const ctx = !!j.context_inference;
     $('othersRow').style.display = ctx ? '' : 'none';
+    // learning from real use: only offered when the (lab) server has capture switched on
+    $('captureRow').style.display = j.capture ? '' : 'none';
+    $('report').style.display = j.capture ? '' : 'none';
     if (j.hosted) $('where').textContent = 'Hosted demo: uploaded photos are processed on the demo server and not stored.';
   } catch { h.className = 'bad'; $('healthText').textContent = 'server not reachable'; }
 }
@@ -226,6 +231,7 @@ function render(targets, others) {
   ).join('') : '<li class="meta">nothing above the thresholds</li>';
   $('timing').textContent = result.inference_ms ? `${result.inference_ms} ms on ${result.device || 'server'} · ${result.image?.width}×${result.image?.height}` : '';
   $('download').disabled = false;
+  $('report').disabled = false;
 }
 
 async function analyse(file) {
@@ -244,6 +250,8 @@ async function analyse(file) {
     fd.append('image', file, file.name || 'upload.jpg');
     fd.append('session_id', 'web-ui');
     fd.append('frame_timestamp_ms', String(Date.now()));
+    if ($('consent').checked) fd.append('capture', 'true');
+    lastFile = file;
     const r = await fetch(base() + '/v1/recognitions', { method: 'POST', body: fd });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `server answered ${r.status}`);
     result = await r.json();
@@ -286,6 +294,17 @@ const stage = $('stage');
 stage.addEventListener('drop', e => analyse(e.dataTransfer.files[0]));
 window.addEventListener('paste', e => { const f = [...e.clipboardData.files].find(f => f.type.startsWith('image/')); if (f) analyse(f); });
 ['focus', 'others'].forEach(id => $(id).addEventListener('input', draw));
+let lastFile = null;
+$('report').onclick = async () => {
+  if (!lastFile) return;
+  const note = prompt('What is wrong? (optional, e.g. "missed the TDS 2014 on the left")', '');
+  if (note === null) return;
+  const fd = new FormData();
+  fd.append('image', lastFile, lastFile.name || 'report.jpg');
+  fd.append('note', note);
+  const r = await fetch(base() + '/v1/feedback', { method: 'POST', body: fd });
+  $('error').textContent = r.ok ? 'Thanks - saved for labelling.' : 'Could not save the report.';
+};
 $('download').onclick = () => {
   const a = document.createElement('a');
   a.download = `${fileName}-labelled.jpg`; a.href = canvas.toDataURL('image/jpeg', 0.92); a.click();

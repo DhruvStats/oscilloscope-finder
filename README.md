@@ -145,3 +145,25 @@ The detector gives every candidate box a confidence score; most candidates are n
 shadows) with low scores. One cut-off is therefore required, but it is fixed on the server
 (`TARGET_MIN_CONF`, default 0.4, chosen on the real held-out photos with `tools/eval_app.py`) instead of a
 slider in the page.
+
+## Long-term workflow (self-hosted, data stays in the lab)
+
+| Need | How | Files |
+|---|---|---|
+| Add instruments | one registry: names, colours, sizes, weights, 3D textures; everything reads it | `config/instruments.yaml`, `tools/registry_sync.py` |
+| Team labelling | Label Studio on the lab LAN, invite-only sign-up | `labelstudio/start_team.ps1` |
+| Fast retraining | GPU used automatically; one-zip bundle for the NVIDIA workstation | `training/train_cpu.py --device auto`, `tools/package_for_workstation.py` |
+| Learning from real use | opt-in capture of unsure frames + "Report wrong result" -> Label Studio | `CAPTURE_MODE=on`, `labelstudio/add_tasks.py` |
+| Edge / mobile / headset | ONNX export, verified against PyTorch | `tools/export_onnx.py` -> `models/export/` |
+
+Adding an instrument: add it to `config/instruments.yaml` -> `python tools/registry_sync.py` (Label Studio
+interface) -> photograph it into `raw/new_photos/<label>/` -> label in Label Studio -> import -> rebuild the
+dataset -> retrain (workstation) -> `tools/eval_app.py` -> deploy if better.
+
+Learning from real use (lab server only, off by default, never on Render):
+```powershell
+$env:CAPTURE_MODE = "on"; .venv\Scripts\python -m uvicorn server.app:app --host 0.0.0.0 --port 8011
+# clients opt in (page checkbox / Unity "Contribute Unsure Frames"); frames land in raw/captures/<date>/
+.venv\Scripts\python labelstudio\make_tasks.py --new raw\captures\2026-10-08 --only-new
+$env:LS_TOKEN = "<token>"; .labelstudio-venv\Scripts\python labelstudio\add_tasks.py
+```

@@ -44,3 +44,5 @@ docs/*.pdf
 
 # packaged bundles (contain the dataset)
 dist/
+labelstudio/tasks_new.json
+raw/captures/

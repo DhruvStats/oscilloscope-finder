@@ -16,8 +16,12 @@ Environment (all optional):
   TILED_DETECTION=off        only look at the whole photo (faster, but misses small, distant instruments)
   CONTEXT_TILES=off          everyday objects from the whole photo only (faster)
   DEMO_PASSWORD              if set, the page and API ask for HTTP basic auth (any user name, this password)
+  CAPTURE_MODE=on            lab server only: store unsure frames from opted-in clients and reported photos
+                             in raw/captures/<date>/ for labelling (off by default, always off on Render)
 """
 import base64
+import datetime
+import json
 import secrets
 import os
 import sys
@@ -65,6 +69,11 @@ USE_CONTEXT = os.environ.get("CONTEXT_MODEL", "on").lower() not in ("off", "0", 
 CONTEXT_TILES = os.environ.get("CONTEXT_TILES", "on").lower() not in ("off", "0", "false", "no")
 MAX_UPLOAD = int(float(os.environ.get("MAX_UPLOAD_MB", "15")) * 1024 * 1024)
 DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "")
+# Learning from real use (opt-in). Frames are NOT stored unless CAPTURE_MODE=on on a lab server; never on the
+# hosted demo. Stored: frames a consenting client sends where the model is unsure, and photos reported wrong.
+CAPTURE = os.environ.get("CAPTURE_MODE", "off").lower() == "on" and not os.environ.get("RENDER")
+CAPTURE_ROOT = os.path.join(ROOT, "raw", "captures")
+UNSURE_RANGE = (0.15, 0.6)   # a target box in this confidence band = "model is unsure" -> worth labelling
 torch.set_num_threads(int(os.environ.get("TORCH_THREADS", max(1, (os.cpu_count() or 2) // 2))))
 
 
@@ -224,6 +233,7 @@ def health():
         "context_inference": "yolox_tiny_coco" if CONTEXT else None,
         "device": "cpu",
         "tiled_detection": TILES,
+        "capture": CAPTURE,
         "min_confidence": TARGET_MIN_CONF,
         # Render sets RENDER=true; the page then says photos go to the demo server instead of "runs locally"
         "hosted": bool(os.environ.get("RENDER")),
@@ -231,22 +241,44 @@ def health():
     }
 
 
-@app.post("/v1/recognitions")
-async def recognitions(image: UploadFile = File(...), session_id: str = Form(None),
-                       frame_timestamp_ms: int = Form(None)):
-    if TARGET is None:
-        raise HTTPException(503, "oscilloscope model weights are not available yet")
+async def _read_image(image):
     raw = await image.read(MAX_UPLOAD + 1)
     if len(raw) > MAX_UPLOAD:
         raise HTTPException(413, f"image larger than {MAX_UPLOAD // (1024 * 1024)} MB")
-    data = np.frombuffer(raw, np.uint8)
-    img = cv2.imdecode(data, cv2.IMREAD_COLOR)
+    img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
         raise HTTPException(400, "image could not be decoded (use JPEG or PNG)")
+    return img
+
+
+def _capture(img, reason, detections, note=""):
+    """Store a frame for labelling: raw/captures/<date>/<time>_<reason>.jpg + .json (model boxes, reason)."""
+    day = datetime.date.today().isoformat()
+    folder = os.path.join(CAPTURE_ROOT, day)
+    os.makedirs(folder, exist_ok=True)
+    stem = datetime.datetime.now().strftime("%H%M%S_%f")[:-3] + "_" + reason
+    cv2.imwrite(os.path.join(folder, stem + ".jpg"), img, [cv2.IMWRITE_JPEG_QUALITY, 92])
+    with open(os.path.join(folder, stem + ".json"), "w") as f:
+        json.dump({"reason": reason, "note": note[:500], "detections": detections}, f, indent=1)
+    return os.path.relpath(os.path.join(folder, stem + ".jpg"), ROOT).replace(os.sep, "/")
+
+
+@app.post("/v1/recognitions")
+async def recognitions(image: UploadFile = File(...), session_id: str = Form(None),
+                       frame_timestamp_ms: int = Form(None), capture: bool = Form(False)):
+    if TARGET is None:
+        raise HTTPException(503, "oscilloscope model weights are not available yet")
+    img = await _read_image(image)
     t0 = time.perf_counter()
-    targets = TARGET.detect(img, TARGET_MIN_CONF, TILES)
+    # detect down to the "unsure" level, answer only with confident boxes
+    candidates = TARGET.detect(img, min(TARGET_MIN_CONF, UNSURE_RANGE[0]), TILES)
+    targets = [d for d in candidates if d["confidence"] >= TARGET_MIN_CONF]
     for d in targets:
         d["target"] = True
+    captured = None
+    # learning from real use: only if the server has capture on AND this client opted in (capture=true)
+    if CAPTURE and capture and any(UNSURE_RANGE[0] <= d["confidence"] < UNSURE_RANGE[1] for d in candidates):
+        captured = _capture(img, "unsure", candidates)
     context = []
     if CONTEXT:
         for d in CONTEXT.detect(img, COCO_MIN_CONF, TILES and CONTEXT_TILES):
@@ -265,7 +297,18 @@ async def recognitions(image: UploadFile = File(...), session_id: str = Form(Non
         "image": {"width": img.shape[1], "height": img.shape[0]},
         "inference_ms": round((time.perf_counter() - t0) * 1000, 1),
         "detections": sorted(targets, key=lambda d: -d["confidence"]) + sorted(context, key=lambda d: -d["confidence"]),
+        "captured": bool(captured),
     }
+
+
+@app.post("/v1/feedback")
+async def feedback(image: UploadFile = File(...), note: str = Form("")):
+    """"This result is wrong": store the photo (and the model's boxes) for labelling. Lab server only."""
+    if not CAPTURE:
+        raise HTTPException(403, "feedback capture is off on this server (CAPTURE_MODE=off or hosted demo)")
+    img = await _read_image(image)
+    candidates = TARGET.detect(img, UNSURE_RANGE[0], TILES) if TARGET else []
+    return {"stored": _capture(img, "reported", candidates, note)}
 
 
 @app.get("/samples")
