@@ -249,13 +249,29 @@ def cmd_generate(a):
 
 
 def cmd_train(a):
+    """Start a Roboflow training run and wait for it (the SDK's legacy train() crashes without a model type)."""
+    import time
     key = os.environ.get("ROBOFLOW_API_KEY", "")
     if not key:
         sys.exit("ROBOFLOW_API_KEY is not set")
-    ver = workspace(key).project(PROJECT).version(a.version)
-    print(f"starting Roboflow training on version {a.version} (runs on Roboflow's GPU; may take 20-60 min) ...")
-    ver.train(speed=a.speed, epochs=a.epochs)
-    print("training finished - compare with:  tools/roboflow_connector.py eval --version", a.version, "--send")
+    proj = workspace(key).project(PROJECT)
+    ver = proj.version(a.version)
+    print(f"starting Roboflow training: model {a.model}, version {a.version} (Roboflow GPU, ~20-60 min) ...")
+    tr = ver.create_training(model_type=a.model, speed=a.speed, epochs=a.epochs)
+    print(f"training id {getattr(tr, 'training_id', '?')} - follow it at https://app.roboflow.com/{proj.id}/{a.version}")
+    if a.no_wait:
+        return
+    last = None
+    while True:
+        status = tr.refresh().status
+        if status != last:
+            print(time.strftime("%H:%M"), "status:", status, flush=True)
+            last = status
+        if status in ("finished", "failed", "cancelled", "error"):
+            break
+        time.sleep(60)
+    if status == "finished":
+        print("done - compare with our model:  tools/roboflow_connector.py eval --version", a.version, "--send")
 
 
 def main():
@@ -271,7 +287,10 @@ def main():
     sub.add_parser("generate")
     p = sub.add_parser("train")
     p.add_argument("--version", type=int, required=True)
-    p.add_argument("--speed", default="fast", help="fast (free) or accurate (paid)")
+    p.add_argument("--model", default="rfdetr-small",
+                   help="Roboflow model id, e.g. rfdetr-nano / rfdetr-small / rfdetr-medium (Apache-2.0)")
+    p.add_argument("--speed", default=None, help="optional preset, e.g. fast")
+    p.add_argument("--no-wait", action="store_true", help="start the run and return immediately")
     p.add_argument("--epochs", type=int, default=None)
     p = sub.add_parser("eval")
     p.add_argument("--version", type=int, required=True)
