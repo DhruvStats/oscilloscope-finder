@@ -33,8 +33,8 @@ locally on the CPU — no cloud calls, no downloads at runtime.
 ## Mode: "oscilloscope" (default) or exact model
 
 `LABEL_MODE=generic` (default) answers every target as **Oscilloscope** - on the 23 real test images 30/35
-found at 40% (31/35 at 30%), 0 naming errors. The detector's model guess is kept in `model_hint`.
-`LABEL_MODE=models` names RTB2004 / TDS 2014 / TDS 1002 (plus the second-stage Tektronix check), ~60% right.
+found (86%), 0 naming errors. The model guess (detector + second-stage Tektronix classifier) is in `model_hint`.
+`LABEL_MODE=models` names RTB2004 / TDS 2014 / TDS 1002: 26/35 right with v5 + Tektronix check (21/35 for v4 alone).
 
 ## Current result (real held-out images, scored as the app runs: whole photo + tiles, 40% cut-off)
 
@@ -42,7 +42,9 @@ found at 40% (31/35 at 30%), 0 naming errors. The detector's model guess is kept
 |---|---|---|---|---|---|
 | v3 | 14 lab photos (18 instruments) | 14 | 4 | 0 | 1 |
 | v3 | 23 images incl. 9 from an unseen lab (35 instruments) | 21 | 7 | 7 | 1 |
-| **v4 (deployed)** | same 23 images | **21** | 9 | **5** | 3 |
+| v4 | same 23 images | 21 | 9 | 5 | 3 |
+| v4 + Tektronix check | same 23 images | 24 | 6 | 5 | 3 |
+| **v5 + Tektronix check (deployed)** | same 23 images | **26** | **4** | 5 | 4 |
 
 v4 (trained on the 2026-10-08 batch, 1,812 training images) equals v3 at 40% and beats it at 30/50/60%
 (22/20/20 vs 21/18/18). Main remaining error: TDS 2014 vs TDS 1002 naming.

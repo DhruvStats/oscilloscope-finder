@@ -386,8 +386,9 @@ def build():
                   ["v2 - 3D renders + real cut-outs (14 photos)", "10 / 18", "6", "2", "1"],
                   ["v3 - + wide scenes, far / rotated scopes (14 photos)", "14 / 18", "4", "0", "1"],
                   ["v3 on the new 23-image test", "21 / 35", "7", "7", "1"],
-                  ["<b>v4 - + 8 Oct batch, 1,812 training images (deployed)</b>", "<b>21 / 35</b>", "9",
-                   "<b>5</b>", "3"]],
+                  ["v4 - + 8 Oct batch, 1,812 training images", "21 / 35", "9", "5", "3"],
+                  ["<b>v5 (30 epochs) + Tektronix check (deployed)</b>", "<b>26 / 35</b>", "<b>4</b>", "5", "4"],
+                  ["<b>Default mode: just \"Oscilloscope\" (v5)</b>", "<b>30 / 35</b>", "-", "5", "4"]],
                  [78 * mm, 28 * mm, 22 * mm, 18 * mm, fw - 146 * mm]),
            P("Scored the way the app works (whole photo + tiles, 40% cut-off) on real images never used in training. "
              "The 23-image test includes 9 frames from a lab the model has never seen, so it is harder than the "
