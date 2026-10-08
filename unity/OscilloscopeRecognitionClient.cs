@@ -108,6 +108,14 @@ namespace LeonardoAR
             }
         }
 
+        /// Attach a camera at runtime (e.g. from CameraStarter) and start sending frames.
+        public void UseCamera(WebCamTexture cam)
+        {
+            bool running = webcam != null;
+            webcam = cam;
+            if (!running) StartCoroutine(Loop());
+        }
+
         IEnumerator Loop()
         {
             var wait = new WaitForSeconds(1f / sendRate);
