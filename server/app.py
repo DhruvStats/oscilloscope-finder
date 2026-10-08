@@ -14,6 +14,7 @@ Environment (all optional):
   TORCH_THREADS              CPU threads for inference (default: half the cores)
   MAX_UPLOAD_MB              reject larger uploads (default 15)
   TILED_DETECTION=off        only look at the whole photo (faster, but misses small, distant instruments)
+  CONTEXT_TILES=off          everyday objects from the whole photo only (faster)
   DEMO_PASSWORD              if set, the page and API ask for HTTP basic auth (any user name, this password)
 """
 import base64
@@ -58,6 +59,8 @@ TARGET_MIN_CONF = float(os.environ.get("TARGET_MIN_CONF", "0.4"))
 COCO_MIN_CONF = float(os.environ.get("COCO_MIN_CONF", "0.35"))
 TILES = os.environ.get("TILED_DETECTION", "on").lower() not in ("off", "0", "false", "no")
 USE_CONTEXT = os.environ.get("CONTEXT_MODEL", "on").lower() not in ("off", "0", "false", "no")
+# zoomed tiles for everyday objects too: finds small ones (cups, phones, bottles) in wide shots
+CONTEXT_TILES = os.environ.get("CONTEXT_TILES", "on").lower() not in ("off", "0", "false", "no")
 MAX_UPLOAD = int(float(os.environ.get("MAX_UPLOAD_MB", "15")) * 1024 * 1024)
 DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "")
 torch.set_num_threads(int(os.environ.get("TORCH_THREADS", max(1, (os.cpu_count() or 2) // 2))))
@@ -104,7 +107,13 @@ class Detector:
                     continue
                 dets.append(dict(d, bbox={"x": round(bx0 / w, 5), "y": round(by0 / h, 5),
                                           "width": round((bx1 - bx0) / w, 5), "height": round((by1 - by0) / h, 5)}))
-        return merge(dets)
+        if self.class_agnostic:
+            return merge(dets)
+        # everyday objects: a cup on a table is fine, so only merge duplicates of the same class
+        by_label = {}
+        for d in dets:
+            by_label.setdefault(d["label"], []).append(d)
+        return [k for group in by_label.values() for k in merge(group)]
 
     @torch.no_grad()
     def __call__(self, img, min_conf):
@@ -129,6 +138,13 @@ class Detector:
                          "width": round((x1 - x0) / w, 5), "height": round((y1 - y0) / h, 5)},
             })
         return dets
+
+
+def _covered(a, b):
+    """Fraction of box a (normalised x, y, width, height) that lies inside box b."""
+    ix = max(0.0, min(a["x"] + a["width"], b["x"] + b["width"]) - max(a["x"], b["x"]))
+    iy = max(0.0, min(a["y"] + a["height"], b["y"] + b["height"]) - max(a["y"], b["y"]))
+    return ix * iy / max(1e-9, a["width"] * a["height"])
 
 
 def merge(dets, iou_thr=0.3, contain_thr=0.5):
@@ -160,7 +176,10 @@ def load():
         if wanted and exp_name != wanted:
             continue
         exp = importlib.import_module(exp_name).Exp()
-        ckpt = os.environ.get("TARGET_CKPT") or os.path.join(exp.output_dir, exp.exp_name, "best_ckpt.pth")
+        # the deployed, tested weights first; a training checkpoint only as a fallback (it may be a half-finished run)
+        deployed = os.path.join(ROOT, "models", "deploy", f"{exp_name}.pth")
+        ckpt = os.environ.get("TARGET_CKPT") or (
+            deployed if os.path.exists(deployed) else os.path.join(exp.output_dir, exp.exp_name, "best_ckpt.pth"))
         if os.path.exists(ckpt):
             # one physical object gets one identity: suppress overlapping boxes across classes
             target = Detector(exp, ckpt, names, exp_name.replace("yolox_tiny_", ""), class_agnostic=True)
@@ -225,7 +244,13 @@ async def recognitions(image: UploadFile = File(...), session_id: str = Form(Non
     targets = TARGET.detect(img, TARGET_MIN_CONF, TILES)
     for d in targets:
         d["target"] = True
-    context = [dict(d, target=False) for d in CONTEXT(img, COCO_MIN_CONF)] if CONTEXT else []
+    context = []
+    if CONTEXT:
+        for d in CONTEXT.detect(img, COCO_MIN_CONF, TILES and CONTEXT_TILES):
+            # the generic model often calls an oscilloscope "tv", "microwave" or "laptop": the specific model wins
+            if any(_covered(d["bbox"], t["bbox"]) > 0.5 for t in targets):
+                continue
+            context.append(dict(d, target=False))
     return {
         "request_id": str(uuid.uuid4()),
         "session_id": session_id,

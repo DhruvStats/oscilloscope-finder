@@ -3,13 +3,13 @@ services:
   - type: web
     name: oscilloscope-finder
     runtime: docker
-    plan: free            # 512 MB RAM; the COCO context model is off to fit. On Standard, set CONTEXT_MODEL=on
+    plan: free            # 512 MB RAM: both models fit (~350-410 MB peak); set CONTEXT_MODEL=off to save memory/time
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     autoDeploy: true
     envVars:
-      - key: CONTEXT_MODEL
-        value: "off"
+      - key: CONTEXT_MODEL      # label everyday objects too (bottle, chair, laptop ...)
+        value: "on"
       - key: TORCH_THREADS
         value: "1"
       - key: MAX_UPLOAD_MB
