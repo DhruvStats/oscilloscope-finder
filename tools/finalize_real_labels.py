@@ -48,6 +48,23 @@ MANUAL.update({
     "26": [("tek_tds2014", (80, 858, 449, 1080)), ("rs_rtb2004", (0, 787, 59, 1045))],
     "28": [("tek_tds1002", (664, 298, 840, 378))],
 })
+# 2026-10-08 second review: scopes that were in the photo but had no box (a missing box teaches
+# "this is not a scope"). Found by running the model at low confidence and checking every candidate.
+# In the croissant-table session only one TDS 1002 exists, so a second Tektronix there is the TDS 2014.
+MANUAL.update({
+    "09": [("tek_tds1002", (583, 372, 881, 571)), ("rs_rtb2004", (340, 185, 435, 325)),
+           ("tek_tds2014", (205, 250, 398, 400))],
+    "12": [("tek_tds1002", (126, 320, 297, 706)), ("tek_tds2014", (403, 56, 647, 216)),
+           ("rs_rtb2004", (645, 25, 717, 222))],
+    "14": [("tek_tds1002", (0, 0, 0, 0)), ("tek_tds2014", (0, 25, 302, 181)), ("rs_rtb2004", (245, 0, 395, 140))],
+    "52": [("tek_tds2014", (0, 0, 0, 0)), ("tek_tds1002", (324, 329, 473, 396))],
+    "57": [("rs_rtb2004", (0, 0, 0, 0)), ("tek_tds2014", (4, 361, 173, 684))],
+    "59": [("rs_rtb2004", (0, 0, 0, 0)), ("tek_tds2014", (4, 555, 112, 861))],
+    "62": [("rs_rtb2004", (0, 0, 0, 0)), ("tek_tds2014", (2, 112, 67, 495))],
+    "63": [("rs_rtb2004", (0, 0, 0, 0)), ("tek_tds2014", (5, 203, 243, 554))],
+})
+# (0, 0, 0, 0) = keep the photo's existing box of that class (filled in below)
+KEEP = (0, 0, 0, 0)
 # the box is right but the model's class was not: the white-table session is the TDS 2014
 RECLASS = {"27": "tek_tds2014"}
 TEST = {"20", "25",                       # user's screenshots: wide office, far ARCADIA bench
@@ -76,7 +93,14 @@ def main():
         if photo in RECLASS:
             boxes = [dict(b, cls=RECLASS[photo]) for b in boxes]
         if photo in MANUAL:
-            boxes = [{"cls": c, "bbox": [x0, y0, x1 - x0, y1 - y0]} for c, (x0, y0, x1, y1) in MANUAL[photo]]
+            new = []
+            for c, box in MANUAL[photo]:
+                if box == KEEP:     # keep the reviewed box of this class from the draft
+                    new += [b for b in boxes if b["cls"] == c][:1]
+                else:
+                    x0, y0, x1, y1 = box
+                    new.append({"cls": c, "bbox": [x0, y0, x1 - x0, y1 - y0]})
+            boxes = new
         out.append({"file": it["file"], "session": it["session"], "view": it["view"],
                     "split": "test" if photo in TEST else "train", "boxes": boxes})
 
