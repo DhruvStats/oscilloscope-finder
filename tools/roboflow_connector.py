@@ -198,7 +198,11 @@ def cmd_eval(a):
         print("DRY RUN - nothing sent:", "; ".join(problems))
         return
     ws = workspace(key)
-    model = ws.project(PROJECT).version(a.version).model
+    ver = ws.project(PROJECT).version(a.version)
+    models = ver.models() if hasattr(ver, "models") else []   # SDK >= 1.7: trained models of this version
+    model = models[-1] if models else getattr(ver, "model", None)
+    if models:
+        print("model:", getattr(model, "model_id", "?"), getattr(model, "model_type", ""))
     if model is None:
         sys.exit(f"version {a.version} has no trained model yet - train it first (train --version {a.version}) and wait "
                  "until the status is 'finished'.")
