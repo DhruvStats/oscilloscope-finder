@@ -48,3 +48,4 @@ labelstudio/tasks_new.json
 raw/captures/
 .roboflow-venv/
 datasets/roboflow_v*/
+datasets/roboflow_push_labels/

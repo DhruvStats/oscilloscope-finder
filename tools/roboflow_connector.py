@@ -18,7 +18,8 @@ Safety (Leonardo data rules): every command that sends images is a dry run unles
   1. ROBOFLOW_API_KEY is set           (your key - set it in the shell, never paste it in a chat or a file)
   2. ROBOFLOW_UPLOAD_APPROVED=yes       (set only after Leonardo approved sending lab photos to Roboflow)
   3. --send is given on the command line
---what: "all" = the whole dataset; "real" = only the 23 real test photos (real training photos are mixed into
+--what: "labelled" = the ~355 real photos and video frames with their checked boxes (raw/real_labels.json),
+for review in Roboflow; "all" = the whole generated dataset; "real" = only the 23 real test photos (real training photos are mixed into
 the generated set); "synthetic" = train/val only (generated scenes and real crops - they still show the lab).
 Settings: ROBOFLOW_WORKSPACE (default: your default workspace), ROBOFLOW_PROJECT (default oscilloscopes-poc).
 """
@@ -84,8 +85,30 @@ def cmd_status(_):
             print("  workspace            : could not connect:", str(e)[:200])
 
 
+def labelled_files():
+    """Real photos + video frames from raw/real_labels.json as (split, image, temporary YOLO label)."""
+    import cv2
+    tmp = os.path.join(ROOT, "datasets", "roboflow_push_labels")
+    shutil.rmtree(tmp, ignore_errors=True)
+    os.makedirs(tmp)
+    classes = [l.split(":", 1)[1].strip() for l in open(os.path.join(DS, "yolo", "data.yaml"))
+               if l.startswith("  ") and ":" in l]
+    out = []
+    for it in json.load(open(os.path.join(ROOT, "raw", "real_labels.json")))["images"]:
+        img = os.path.join(ROOT, it["file"])
+        h, w = cv2.imread(img).shape[:2]
+        lab = os.path.join(tmp, it["file"].replace("/", "__").rsplit(".", 1)[0] + ".txt")
+        with open(lab, "w") as f:
+            for b in it["boxes"]:
+                x, y, bw, bh = b["bbox"]
+                f.write(f"{classes.index(b['cls'])} {(x + bw / 2) / w:.6f} {(y + bh / 2) / h:.6f} "
+                        f"{bw / w:.6f} {bh / h:.6f}\n")
+        out.append(("test" if it.get("split") == "test" else "train", img, lab))
+    return out
+
+
 def cmd_push(a):
-    files = split_files(a.what)
+    files = labelled_files() if a.what == "labelled" else split_files(a.what)
     by = {s: sum(1 for x in files if x[0] == s) for s in ("train", "val", "test")}
     print(f"would upload {len(files)} images ({by}) with YOLO boxes to project '{PROJECT}'")
     key, problems = gate(a.send)
@@ -101,7 +124,7 @@ def cmd_push(a):
     for i, (split, img, lab) in enumerate(files, 1):
         # the SDK reads YOLO .txt labels together with the class names from data.yaml
         proj.upload(img, annotation_path=lab, split=split if split != "val" else "valid",
-                    batch_name="oscilloscopes3", num_retry_uploads=2, annotation_labelmap=classes)
+                    batch_name="real_labelled" if a.what == "labelled" else "oscilloscopes3", num_retry_uploads=2, annotation_labelmap=classes)
         if i % 50 == 0:
             print(f"  {i}/{len(files)}")
     print(f"uploaded {len(files)} images to {proj.id}")
@@ -189,7 +212,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status")
     p = sub.add_parser("push")
-    p.add_argument("--what", choices=["real", "synthetic", "all"], default="all")
+    p.add_argument("--what", choices=["labelled", "real", "synthetic", "all"], default="labelled")
     p.add_argument("--send", action="store_true")
     p = sub.add_parser("pull")
     p.add_argument("--version", type=int, required=True)
