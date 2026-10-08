@@ -65,7 +65,7 @@ def split_files(what):
             continue
         for f in sorted(os.listdir(idir)):
             real = "real_" in f or (split == "test")
-            if what == "real" and not real or what == "synthetic" and real:
+            if what == "real" and not real or what == "synthetic" and real or what == "val" and split != "val":
                 continue
             stem = os.path.splitext(f)[0]
             out.append((split, os.path.join(idir, f), os.path.join(DS, "yolo", "labels", split, stem + ".txt")))
@@ -111,6 +111,9 @@ def labelled_files():
 
 def cmd_push(a):
     files = labelled_files() if a.what == "labelled" else split_files(a.what)
+    if a.limit:
+        step = max(1, len(files) // a.limit)
+        files = files[::step][:a.limit]
     by = {s: sum(1 for x in files if x[0] == s) for s in ("train", "val", "test")}
     print(f"would upload {len(files)} images ({by}) with YOLO boxes to project '{PROJECT}'")
     key, problems = gate(a.send)
@@ -257,6 +260,10 @@ def cmd_train(a):
     proj = workspace(key).project(PROJECT)
     ver = proj.version(a.version)
     print(f"starting Roboflow training: model {a.model}, version {a.version} (Roboflow GPU, ~20-60 min) ...")
+    splits = getattr(ver, "splits", None) or {}
+    if splits and not splits.get("valid"):
+        sys.exit(f"version {a.version} has no Valid images {splits}. Run:  push --what val --limit 100 --send"
+                 "  then  generate  and train the NEW version number it prints.")
     tr = ver.create_training(model_type=a.model, speed=a.speed, epochs=a.epochs)
     print(f"training id {getattr(tr, 'training_id', '?')} - follow it at https://app.roboflow.com/{proj.id}/{a.version}")
     if a.no_wait:
@@ -279,7 +286,9 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status")
     p = sub.add_parser("push")
-    p.add_argument("--what", choices=["labelled", "real", "synthetic", "all"], default="labelled")
+    p.add_argument("--what", choices=["labelled", "real", "synthetic", "val", "all"], default="labelled",
+                   help="val = our validation images -> Roboflow 'Valid' split (needed before training)")
+    p.add_argument("--limit", type=int, default=0, help="upload at most N images (evenly spread)")
     p.add_argument("--send", action="store_true")
     p = sub.add_parser("pull")
     p.add_argument("--version", type=int, required=True)
