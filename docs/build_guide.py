@@ -118,6 +118,31 @@ def pipeline():
     return d
 
 
+def flow():
+    """Simple story: photos -> labels -> dataset -> training -> test -> server -> users."""
+    W, H = 170 * mm, 40 * mm
+    d = Drawing(W, H)
+    steps = [("1 Photos", "your lab photos"), ("2 Labels", "boxes, checked"), ("3 Dataset", "renders + cut-outs"),
+             ("4 Training", "YOLOX-Tiny, CPU"), ("5 Test", "14 real photos"), ("6 Server", "local or Render"),
+             ("7 Users", "web page, Quest")]
+    bw, gap = 21.5 * mm, 3.25 * mm
+    y = 12 * mm
+    for i, (t, sub) in enumerate(steps):
+        x = i * (bw + gap)
+        d.add(Rect(x, y, bw, 16 * mm, rx=3, ry=3, fillColor=SOFT, strokeColor=ACCENT, strokeWidth=0.8))
+        d.add(String(x + bw / 2, y + 9.5 * mm, t, fontName="Helvetica-Bold", fontSize=7.4, fillColor=INK,
+                     textAnchor="middle"))
+        d.add(String(x + bw / 2, y + 4.5 * mm, sub, fontName="Helvetica", fontSize=5.9, fillColor=MUTED,
+                     textAnchor="middle"))
+        if i < len(steps) - 1:
+            x0, x1, ym = x + bw + 0.3 * mm, x + bw + gap - 0.3 * mm, y + 8 * mm
+            d.add(Polygon([x1, ym, x0, ym + 1.3 * mm, x0, ym - 1.3 * mm], fillColor=MUTED, strokeColor=MUTED))
+    d.add(String(W / 2, 4 * mm, "If the test score is better than the current model, the new model is deployed; "
+                 "otherwise the old one stays.", fontName="Helvetica", fontSize=7.2, fillColor=MUTED,
+                 textAnchor="middle"))
+    return d
+
+
 def footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Helvetica", 7.5)
@@ -201,23 +226,111 @@ def build():
              "<b>Focus on oscilloscopes</b> dims the rest of the photo; <b>Label other objects</b> shows everyday "
              "objects (bottle, chair, tv) in grey when that model is on.",
              "<b>Download labelled image</b> saves the result as JPEG. <b>New image</b> clears the page.",
-             "No sliders: the server applies one tested confidence cut-off (40%, see section 2.7)."])
+             "No sliders: the server applies one tested confidence cut-off (40%, see section 3.7)."])
+    st.append(PageBreak())
+
+    # ---------------------------------------------------------------- components in simple words
+    st += [P("2. What each part does, in simple words", "h1"),
+           P("The project is like a small factory. Photos go in at one end; at the other end a program can look "
+             "at any new photo and say <i>&quot;that is a Tektronix TDS 2014&quot;</i>. Here is every part, what it "
+             "does, and where it lives."),
+           flow(), Spacer(1, 4),
+           P("The parts that do the recognising", "h2"),
+           table([
+               ["Part", "What it does, in simple words", "Where"],
+               ["<b>Detector model</b> (YOLOX-Tiny)",
+                "The &quot;brain&quot;. It looks at a picture and says: here is an oscilloscope, this is its model, "
+                "and I am 87% sure. Small enough to run on a normal computer. We taught it our three oscilloscopes.",
+                "models/deploy/"],
+               ["<b>Everyday-objects model</b> (optional)",
+                "A second brain that already knows 80 common things (bottle, chair, tv) and labels them in grey. "
+                "On locally, off on Render to save memory.",
+                "models/"],
+               ["<b>Server</b> (FastAPI)",
+                "The &quot;reception desk&quot;. It receives a photo, asks the detector, also looks at zoomed-in "
+                "pieces of the photo so small far-away instruments are not missed, removes doubles, throws away "
+                "unsure answers (below 40%), and sends back the result.",
+                "server/app.py"],
+               ["<b>Web page</b>",
+                "The &quot;window&quot; for people. Upload or paste a photo, see coloured boxes with names, "
+                "download the result.",
+                "web/index.html"],
+               ["<b>Headset client</b> (Unity / Quest)",
+                "Like the web page, but for the AR headset: it sends what the camera sees about once per second "
+                "and switches on the right AR content.",
+                "unity/"],
+           ], [38 * mm, fw - 70 * mm, 32 * mm]),
+           P("The parts that teach the brain", "h2"),
+           table([
+               ["Part", "What it does, in simple words", "Where"],
+               ["<b>Photos</b>", "64 photos of the real instruments taken in the lab: the raw material.", "raw/"],
+               ["<b>Labels</b>",
+                "For every photo: where each instrument is (a box) and which model it is - like the answers to a "
+                "school exercise.",
+                "raw/real_labels.json"],
+               ["<b>Label Studio</b>",
+                "A drawing tool in the browser. It shows each photo with the boxes already drawn; a person checks "
+                "them and fixes mistakes.",
+                "labelstudio/"],
+               ["<b>Dataset generator</b>",
+                "Makes many practice pictures from few photos: 3D models of the instruments, real instruments cut "
+                "out and pasted into new scenes, zoomed copies, plus look-alikes (like a wall socket) that must "
+                "<i>not</i> be called an oscilloscope. It places everything itself, so every box is exact.",
+                "synth/"],
+               ["<b>Training</b>",
+                "The &quot;lessons&quot;. The brain studies the practice pictures again and again (20 rounds, about "
+                "2 hours) and slowly gets better. 80% of the pictures are for learning, 20% for checking during "
+                "training.",
+                "training/"],
+               ["<b>Test</b>",
+                "The &quot;final exam&quot;: 14 real photos the brain has never seen. The score tells honestly how "
+                "good it is (now 14 of 18 instruments right). A new brain is only used if it scores better.",
+                "tools/eval_app.py"],
+           ], [38 * mm, fw - 70 * mm, 32 * mm]),
+           KeepTogether([P("The parts that put it online", "h2"),
+           table([
+               ["Part", "What it does, in simple words", "Where"],
+               ["<b>GitHub</b>",
+                "The online safe for the code and the trained brain (private). Photos stay on the lab PC.",
+                "repo oscilloscope-finder"],
+               ["<b>Docker</b>",
+                "Packs the server, the brain and everything they need into one box that runs the same anywhere.",
+                "Dockerfile"],
+               ["<b>Render</b>",
+                "A hosting service that takes the box from GitHub and puts the web page on the Internet. It "
+                "updates by itself after every change. Free plan: sleeps when nobody uses it.",
+                "render.yaml"],
+               ["<b>Guide and README</b>", "The instructions: this PDF and the README in the main folder.",
+                "docs/, README.md"],
+           ], [38 * mm, fw - 70 * mm, 32 * mm])]),
+           P("Words used in this guide", "h2"),
+           table([
+               ["Word", "Meaning"],
+               ["Box (bounding box)", "the rectangle drawn around an instrument"],
+               ["Confidence", "how sure the brain is, from 0% to 100%"],
+               ["Threshold / cut-off", "answers below this confidence (40%) are ignored, because they are mostly "
+                                      "wrong"],
+               ["Training / epoch", "teaching the brain; one epoch = it has seen all practice pictures once"],
+               ["Validation / test set", "pictures kept apart to check the brain; the test set is real photos only"],
+               ["False alarm", "the brain calls something an oscilloscope that is not one (e.g. a wall socket)"],
+               ["Tiles", "zoomed-in pieces of a photo, so small far-away instruments become big enough"],
+           ], [40 * mm, fw - 40 * mm])]
     st.append(PageBreak())
 
     # ---------------------------------------------------------------- how it was built
-    st += [P("2. Explanation of the project", "h1"),
-           P("2.1 The goal", "h2"),
+    st += [P("3. Explanation of the project", "h1"),
+           P("3.1 The goal", "h2"),
            P("The Leonardo AR proof-of-concept needs a local server that recognises specific physical instruments "
              "in camera frames from an AR headset, so the matching AR module can be shown. Generic detectors only "
              "know classes like \"tv\" or \"microwave\", and the two Tektronix models share the same case, so a "
              "dedicated model had to be trained."),
-           P("2.2 The data", "h2")]
+           P("3.2 The data", "h2")]
     st += B(["<b>64 lab phone photos</b> of the three instruments (front, back, sides, top, bottom, desk scenes).",
              "<b>1 openly licensed photo</b> of a TDS 1002 (Wikimedia Commons, CC BY-SA 2.5, credited) and a few "
              "R&amp;S press images of the RTB2004, recorded with their source in raw/web/provenance.csv.",
              "Web shop and eBay photos were not used: they are copyrighted and often show newer variants "
              "(TDS2014B/C, TDS1002B) with different front panels."])
-    st += [P("2.3 Making many training images from few photos", "h2"),
+    st += [P("3.3 Making many training images from few photos", "h2"),
            P("Real training needs hundreds of labelled images per instrument; we had about 20 real views each. "
              "Three techniques multiply them, all with exact boxes:")]
     st += B(["<b>3D models:</b> the photos of each side were straightened and wrapped onto a box with the real "
@@ -230,15 +343,15 @@ def build():
              "socket, cupboard sign) are pasted without boxes, so the model learns they are not oscilloscopes."])
     st += img("dataset_preview.jpg", fw, "Generated training images: boxes are known exactly because the program "
                                          "placed every instrument itself.")
-    st += [P("2.4 Labels", "h2"),
+    st += [P("3.4 Labels", "h2"),
            P("Generated images are labelled automatically. Real photos were pre-labelled by the model, then every "
              "box was checked against the photo; the identity of each Tektronix was confirmed from the front panel "
              "(<b>TDS 2014: coloured buttons, 5 inputs; TDS 1002: grey buttons, 3 inputs</b>) or from the back "
              "(the TDS 1002 has a port module). Wrong or missing boxes were drawn by hand. The result is in "
-             "raw/real_labels.json and is loaded into Label Studio for human review (section 3).")]
+             "raw/real_labels.json and is loaded into Label Studio for human review (section 4).")]
     st.append(PageBreak())
 
-    st += [P("2.5 Training", "h2"),
+    st += [P("3.5 Training", "h2"),
            P("Detector: <b>YOLOX-Tiny</b> (416 x 416 input), starting from the official COCO weights (release 0.3.0, "
              "commit 41977848, checkpoint SHA-256 9de513de...). The official YOLOX trainer requires an NVIDIA GPU; "
              "this PC has none, so a CPU training loop (training/train_cpu.py) reuses YOLOX's own experiment file, "
@@ -251,17 +364,17 @@ def build():
                            "a wide office shot, a far-away bench)", "the honest final score"]],
                  [32 * mm, 95 * mm, fw - 127 * mm]),
            P("The 80/20 split applies from the next training run; the run in progress uses 85/15.", "small"),
-           P("2.6 Finding small, distant instruments", "h2"),
+           P("3.6 Finding small, distant instruments", "h2"),
            P("The model looks at a 416 x 416 version of the photo, so in a wide room shot an oscilloscope shrinks "
              "to about 50 pixels and is missed. The server therefore also looks at overlapping zoomed-in tiles of "
              "the photo and merges the results, keeping one box per object (\"tiled detection\")."),
-           P("2.7 Why there is a confidence threshold", "h2"),
+           P("3.7 Why there is a confidence threshold", "h2"),
            P("For every photo the model proposes many candidate boxes, each with a confidence score. Most are noise "
              "(on one photo a wall socket scored 78%, random spots 5-20%). A cut-off is therefore necessary, but it "
              "does not need to be a slider: the server applies one value, <b>40%</b>, chosen on the real test photos "
              "(results were identical at 30%, 40% and 50%). It can be changed with TARGET_MIN_CONF without code "
              "changes."),
-           P("2.8 Results on real photos", "h2"),
+           P("3.8 Results on real photos", "h2"),
            table([["Model version", "Right model + box", "Wrong name", "Missed", "False alarms"],
                   ["v2 - 3D renders + real cut-outs", "10 / 18", "6", "2", "1"],
                   ["<b>v3 - + wide scenes, far / rotated scopes, real crops (deployed)</b>", "<b>14 / 18</b>",
@@ -278,7 +391,7 @@ def build():
     st.append(PageBreak())
 
     # ---------------------------------------------------------------- labelling + retraining
-    st += [P("3. Labelling with Label Studio", "h1"),
+    st += [P("4. Labelling with Label Studio", "h1"),
            P("Same approach as the joystick dataset in the Leonardo notes: Label Studio runs locally in its own "
              "isolated environment, its database stays in labelstudio/data, and photos are served from raw/ "
              "without copying or uploading. The project <b>PoC oscilloscopes</b> already contains all 64 photos "
@@ -294,7 +407,7 @@ def build():
                 ".venv\\Scripts\\python labelstudio\\make_tasks.py --new raw\\new_photos"),
            P("Import them in the project (Import button), or create a fresh project with setup_project.py "
              "(needs your token in LS_TOKEN; keep the token out of shared files)."),
-           P("4. Retraining after new labels", "h1"),
+           P("5. Retraining after new labels", "h1"),
            code(".venv\\Scripts\\python labelstudio\\import_export.py C:\\path\\to\\export.json",
                 ".venv\\Scripts\\python synth\\gen3.py --per-class 300 --real-labels raw\\real_labels.json",
                 ".venv\\Scripts\\python training\\train_cpu.py --exp yolox_tiny_osc3 --epochs 20 ^",
@@ -303,7 +416,7 @@ def build():
            P("If the score beats the deployed model, copy best_ckpt.pth to models\\deploy\\yolox_tiny_osc3.pth, "
              "commit and push; Render redeploys and the local server picks it up on restart. Keep the PC "
              "plugged in and awake during training (about 2 hours)."),
-           P("5. Folder map", "h1"),
+           P("6. Folder map", "h1"),
            table([["Folder", "Content", "In git"],
                   ["server/, web/", "detector API and web page", "yes"],
                   ["training/, synth/, tools/", "training loop, dataset generator, labelling and test tools", "yes"],
@@ -318,7 +431,7 @@ def build():
     st.append(PageBreak())
 
     # ---------------------------------------------------------------- limits / troubleshooting
-    st += [P("6. Known limits and next steps", "h1")]
+    st += [P("7. Known limits and next steps", "h1")]
     st += B(["<b>TDS 2014 vs TDS 1002 from the front</b> is the main remaining error: only about 11 real TDS 2014 "
              "views exist. More real TDS 2014 photos (different rooms, distances, light) are the best improvement.",
              "<b>Wall socket</b> next to the ARCADIA bench was flagged as a TDS 1002 by v3; v4 trains on it as a "
@@ -328,7 +441,7 @@ def build():
              "The 3D models are boxes, so unusual angles are approximate; real photos always beat renders.",
              "Licences: lab photos are internal data; the R&amp;S press images and the CC BY-SA photo must pass "
              "the Leonardo licence check before any use beyond the PoC."])
-    st += [P("7. Troubleshooting", "h1"),
+    st += [P("8. Troubleshooting", "h1"),
            table([["Problem", "Fix"],
                   ["Page does not open on 8011", "Start the server (1.1); wait ~20 s for the models to load."],
                   ["\"Port in use\"", "Another program uses the port: pick another, e.g. <font name='Courier'>--port 8012</font>."],
