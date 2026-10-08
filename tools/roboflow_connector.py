@@ -4,6 +4,8 @@ Uses Roboflow's official SDK from its own environment (.roboflow-venv), so the m
 
     .roboflow-venv/Scripts/python tools/roboflow_connector.py status
     .roboflow-venv/Scripts/python tools/roboflow_connector.py push  [--what real|synthetic|all] [--send]
+    .roboflow-venv/Scripts/python tools/roboflow_connector.py generate              (dataset version, x3 augmented)
+    .roboflow-venv/Scripts/python tools/roboflow_connector.py train --version N     (Roboflow GPU training)
     .roboflow-venv/Scripts/python tools/roboflow_connector.py pull  --version N
     .roboflow-venv/Scripts/python tools/roboflow_connector.py eval  --version N [--send]
 
@@ -222,6 +224,40 @@ def cmd_eval(a):
           f"false alarms {false}   (compare: tools/eval_app.py for our YOLOX model)")
 
 
+GEN_SETTINGS = {
+    "preprocessing": {"auto-orient": True, "resize": {"width": 640, "height": 640, "format": "Fit within"}},
+    # no horizontal flip: mirroring changes the front panels (text, button order) the model must recognise
+    "augmentation": {
+        "image": {"versions": 3},
+        "brightness": {"brighten": True, "darken": True, "percent": 25},
+        "exposure": {"percent": 15},
+        "blur": {"pixels": 1.5},
+        "noise": {"percent": 2},
+        "rotate": {"degrees": 10},
+    },
+}
+
+
+def cmd_generate(a):
+    key = os.environ.get("ROBOFLOW_API_KEY", "")
+    if not key:
+        sys.exit("ROBOFLOW_API_KEY is not set")
+    proj = workspace(key).project(PROJECT)
+    print("generating a dataset version (augmentation x3, no flips) - this can take a few minutes ...")
+    v = proj.generate_version(GEN_SETTINGS)
+    print(f"version {v} created: https://app.roboflow.com/{proj.id}/{v}")
+
+
+def cmd_train(a):
+    key = os.environ.get("ROBOFLOW_API_KEY", "")
+    if not key:
+        sys.exit("ROBOFLOW_API_KEY is not set")
+    ver = workspace(key).project(PROJECT).version(a.version)
+    print(f"starting Roboflow training on version {a.version} (runs on Roboflow's GPU; may take 20-60 min) ...")
+    ver.train(speed=a.speed, epochs=a.epochs)
+    print("training finished - compare with:  tools/roboflow_connector.py eval --version", a.version, "--send")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -232,11 +268,17 @@ def main():
     p = sub.add_parser("pull")
     p.add_argument("--version", type=int, required=True)
     p.add_argument("--to-labels", action="store_true")
+    sub.add_parser("generate")
+    p = sub.add_parser("train")
+    p.add_argument("--version", type=int, required=True)
+    p.add_argument("--speed", default="fast", help="fast (free) or accurate (paid)")
+    p.add_argument("--epochs", type=int, default=None)
     p = sub.add_parser("eval")
     p.add_argument("--version", type=int, required=True)
     p.add_argument("--send", action="store_true")
     a = ap.parse_args()
-    {"status": cmd_status, "push": cmd_push, "pull": cmd_pull, "eval": cmd_eval}[a.cmd](a)
+    {"status": cmd_status, "push": cmd_push, "pull": cmd_pull, "eval": cmd_eval,
+     "generate": cmd_generate, "train": cmd_train}[a.cmd](a)
 
 
 if __name__ == "__main__":
