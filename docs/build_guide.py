@@ -326,13 +326,16 @@ def build():
              "dedicated model had to be trained."),
            P("3.2 The data", "h2")]
     st += B(["<b>64 lab phone photos</b> of the three instruments (front, back, sides, top, bottom, desk scenes).",
+             "<b>Batch of 8 October 2026:</b> 39 more photos and 3 walk-around videos, turned into 284 sharp frames "
+             "(blurry and near-identical frames dropped). Together: about 350 labelled real images.",
              "<b>1 openly licensed photo</b> of a TDS 1002 (Wikimedia Commons, CC BY-SA 2.5, credited) and a few "
              "R&amp;S press images of the RTB2004, recorded with their source in raw/web/provenance.csv.",
              "Web shop and eBay photos were not used: they are copyrighted and often show newer variants "
              "(TDS2014B/C, TDS1002B) with different front panels."])
     st += [P("3.3 Making many training images from few photos", "h2"),
-           P("Real training needs hundreds of labelled images per instrument; we had about 20 real views each. "
-             "Three techniques multiply them, all with exact boxes:")]
+           P("Real training needs hundreds of labelled images per instrument. Three techniques multiply the real "
+             "images, all with exact boxes; the current dataset has <b>1,812 training and 452 validation images "
+             "(over 700 boxes per instrument)</b>, saved as COCO, YOLO and Pascal VOC:")]
     st += B(["<b>3D models:</b> the photos of each side were straightened and wrapped onto a box with the real "
              "dimensions, so each instrument can be rendered from any angle (also lying on its side).",
              "<b>Cut and paste:</b> each instrument is cut out of the real photos and pasted into new desk scenes - "
@@ -348,22 +351,26 @@ def build():
              "box was checked against the photo; the identity of each Tektronix was confirmed from the front panel "
              "(<b>TDS 2014: coloured buttons, 5 inputs; TDS 1002: grey buttons, 3 inputs</b>) or from the back "
              "(the TDS 1002 has a port module). Wrong or missing boxes were drawn by hand. The result is in "
-             "raw/real_labels.json and is loaded into Label Studio for human review (section 4).")]
+             "raw/real_labels.json and is loaded into Label Studio for human review (section 4). New batches are "
+             "reviewed the same way with tools/review_batch.py (numbered candidate boxes per image), "
+             "tools/review_crops.py (close-ups to tell the models apart) and tools/apply_review.py (the decisions).")]
     st.append(PageBreak())
 
     st += [P("3.5 Training", "h2"),
            P("Detector: <b>YOLOX-Tiny</b> (416 x 416 input), starting from the official COCO weights (release 0.3.0, "
              "commit 41977848, checkpoint SHA-256 9de513de...). The official YOLOX trainer requires an NVIDIA GPU; "
              "this PC has none, so a CPU training loop (training/train_cpu.py) reuses YOLOX's own experiment file, "
-             "augmentation, loss and learning-rate schedule. One run takes about 2 hours. The same experiment file "
-             "works unchanged with the official trainer on the NVIDIA workstation."),
+             "augmentation, loss and learning-rate schedule; it uses an NVIDIA GPU automatically when one is "
+             "present. On this PC one run takes 2-3 hours, on the workstation minutes "
+             "(tools/package_for_workstation.py makes a one-zip bundle)."),
            table([["Split", "Content", "Purpose"],
                   ["Train (80%)", "generated scenes + real training photos and their crops", "learning"],
                   ["Validation (20%)", "generated scenes", "choosing the best epoch"],
-                  ["Test", "14 real photos never used in training (all 3 models, front/back/side, "
-                           "a wide office shot, a far-away bench)", "the honest final score"]],
+                  ["Test", "23 real images never used in training: 14 lab photos (all 3 models, front/back/side, "
+                           "wide office, far bench) + 9 frames from a lab the model has never seen",
+                   "the honest final score"]],
                  [32 * mm, 95 * mm, fw - 127 * mm]),
-           P("The 80/20 split applies from the next training run; the run in progress uses 85/15.", "small"),
+
            P("3.6 Finding small, distant instruments", "h2"),
            P("The model looks at a 416 x 416 version of the photo, so in a wide room shot an oscilloscope shrinks "
              "to about 50 pixels and is missed. The server therefore also looks at overlapping zoomed-in tiles of "
@@ -376,13 +383,16 @@ def build():
              "changes."),
            P("3.8 Results on real photos", "h2"),
            table([["Model version", "Right model + box", "Wrong name", "Missed", "False alarms"],
-                  ["v2 - 3D renders + real cut-outs", "10 / 18", "6", "2", "1"],
-                  ["<b>v3 - + wide scenes, far / rotated scopes, real crops (deployed)</b>", "<b>14 / 18</b>",
-                   "4", "<b>0</b>", "1"]],
+                  ["v2 - 3D renders + real cut-outs (14 photos)", "10 / 18", "6", "2", "1"],
+                  ["v3 - + wide scenes, far / rotated scopes (14 photos)", "14 / 18", "4", "0", "1"],
+                  ["v3 on the new 23-image test", "21 / 35", "7", "7", "1"],
+                  ["<b>v4 - + 8 Oct batch, 1,812 training images (deployed)</b>", "<b>21 / 35</b>", "9",
+                   "<b>5</b>", "3"]],
                  [78 * mm, 28 * mm, 22 * mm, 18 * mm, fw - 146 * mm]),
-           P("Scored the way the app works (whole photo + tiles, 40% cut-off) on the 14 held-out real photos with 18 "
-             "instruments. A v4 model (wall-socket negatives, more TDS 2014 weight) is training; it replaces v3 "
-             "only if it scores better.", "small"),
+           P("Scored the way the app works (whole photo + tiles, 40% cut-off) on real images never used in training. "
+             "The 23-image test includes 9 frames from a lab the model has never seen, so it is harder than the "
+             "first 14-photo test. v4 equals v3 at 40% and beats it at 30%, 50% and 60% (22, 20, 20 vs 21, 18, 18), "
+             "and misses fewer instruments; telling TDS 2014 from TDS 1002 is still the main error.", "small"),
            Spacer(1, 4)]
     row = Table([[img("result_bench.jpg", fw * 0.56)[0], img("result_tds1002.jpg", fw * 0.40)[0]]],
                 colWidths=[fw * 0.58, fw * 0.42])
@@ -394,8 +404,9 @@ def build():
     st += [P("4. Labelling with Label Studio", "h1"),
            P("Same approach as the joystick dataset in the Leonardo notes: Label Studio runs locally in its own "
              "isolated environment, its database stays in labelstudio/data, and photos are served from raw/ "
-             "without copying or uploading. The project <b>PoC oscilloscopes</b> already contains all 64 photos "
-             "with boxes pre-drawn.")]
+             "without copying or uploading. The project <b>PoC oscilloscopes</b> contains the 64 first photos; the 291 "
+             "images of the 8 October batch are added with add_tasks.py (below). Every image opens with its "
+             "reviewed boxes pre-drawn.")]
     st += B(["Open a photo: the boxes appear as a prediction. Adjust, delete, or draw new ones with the keys "
              "<b>1</b> RTB2004, <b>2</b> TDS 2014, <b>3</b> TDS 1002.",
              "Box every target instrument you can see, even partly. Do not box other instruments, monitors, "
@@ -403,15 +414,20 @@ def build():
              "Set the status (done / no target oscilloscope / unsure which model / exclude) and <b>Submit</b>.",
              "When finished: <b>Export > JSON</b>. The rules are in labelstudio/GUIDELINES.md."])
     st += [P("Add new photos", "h2"),
-           code("# put the photos in raw\\new_photos, then create tasks with model-proposed boxes",
-                ".venv\\Scripts\\python labelstudio\\make_tasks.py --new raw\\new_photos"),
-           P("Import them in the project (Import button), or create a fresh project with setup_project.py "
-             "(needs your token in LS_TOKEN; keep the token out of shared files)."),
+           code("# new photos: model-proposed boxes;  reviewed batch: its checked boxes",
+                ".venv\\Scripts\\python labelstudio\\make_tasks.py --new raw\\new_photos --only-new",
+                ".venv\\Scripts\\python labelstudio\\make_tasks.py --only-new --labelled raw\\batch_2026-10-08",
+                "$env:LS_TOKEN = \"<token from Account & Settings>\"",
+                ".labelstudio-venv\\Scripts\\python labelstudio\\add_tasks.py"),
+           P("add_tasks.py adds the tasks to the existing project and skips images that are already there. Keep "
+             "the token out of chats and shared files. For a team, start Label Studio with "
+             "labelstudio\\start_team.ps1 (LAN only, invite-only sign-up)."),
            P("5. Retraining after new labels", "h1"),
            code(".venv\\Scripts\\python labelstudio\\import_export.py C:\\path\\to\\export.json",
                 ".venv\\Scripts\\python synth\\gen3.py --per-class 300 --real-labels raw\\real_labels.json",
-                ".venv\\Scripts\\python training\\train_cpu.py --exp yolox_tiny_osc3 --epochs 20 ^",
-                "    --init models\\training\\osc3_v3_ep15.pth",
+                ".venv\\Scripts\\python tools\\export_formats.py          # YOLO + VOC copies",
+                ".venv\\Scripts\\python training\\train_cpu.py --exp yolox_tiny_osc3 --epochs 12 ^",
+                "    --init models\\deploy\\yolox_tiny_osc3.pth",
                 ".venv\\Scripts\\python tools\\eval_app.py models\\training\\yolox_tiny_osc3\\best_ckpt.pth"),
            P("If the score beats the deployed model, copy best_ckpt.pth to models\\deploy\\yolox_tiny_osc3.pth, "
              "commit and push; Render redeploys and the local server picks it up on restart. Keep the PC "
@@ -421,23 +437,34 @@ def build():
                   ["server/, web/", "detector API and web page", "yes"],
                   ["training/, synth/, tools/", "training loop, dataset generator, labelling and test tools", "yes"],
                   ["labelstudio/", "Label Studio setup, interface, guidelines (database excluded)", "yes"],
+                  ["config/", "instruments.yaml: the list of recognised instruments", "yes"],
                   ["unity/", "Quest / Unity client", "yes"],
-                  ["models/deploy/", "deployed model weights", "yes"],
+                  ["models/deploy/, models/export/", "deployed weights; ONNX export for edge devices",
+                   "yes / no"],
                   ["raw/, datasets/, models/training/", "photos, labels, generated datasets, checkpoints", "no"],
                   ["legacy-yolov8/", "first YOLOv8 + OCR version", "code only"],
                   ["media/, _archive/", "360/3D videos and their scripts; old copy - kept aside", "no"],
                   ["docs/", "this guide and the script that builds it", "yes"]],
                  [45 * mm, fw - 65 * mm, 20 * mm])]
+
+    st += [P("6b. Long-term features (self-hosted, data stays in the lab)", "h2"),
+           table([["Need", "What is in the project"],
+                  ["Add instruments", "config/instruments.yaml drives server, page, generator, training and the Label "
+                                      "Studio interface (tools/registry_sync.py)"],
+                  ["Team labelling", "labelstudio/start_team.ps1 - Label Studio on the lab network, invite-only"],
+                  ["Fast retraining", "GPU used automatically; tools/package_for_workstation.py for the NVIDIA PC"],
+                  ["Learning from real use", "CAPTURE_MODE=on (lab server only): unsure frames from clients that "
+                                             "opted in + \"Report wrong result\" -> raw/captures -> Label Studio"],
+                  ["Edge / headset", "tools/export_onnx.py -> ONNX for Unity Sentis, ONNX Runtime, OpenVINO, "
+                                     "TensorRT (checked against PyTorch)"]],
+                 [38 * mm, fw - 38 * mm])]
     st.append(PageBreak())
 
     # ---------------------------------------------------------------- limits / troubleshooting
     st += [P("7. Known limits and next steps", "h1")]
-    st += B(["<b>TDS 2014 vs TDS 1002 from the front</b> is the main remaining error: only about 11 real TDS 2014 "
-             "views exist. More real TDS 2014 photos (different rooms, distances, light) are the best improvement.",
-             "<b>Wall socket</b> next to the ARCADIA bench was flagged as a TDS 1002 by v3; v4 trains on it as a "
-             "non-target.",
-             "The test set is small (14 photos) and from the same lab; accuracy in a new room may be lower. "
-             "Test with real Quest camera frames before relying on it.",
+    st += B(["<b>TDS 2014 vs TDS 1002</b> remains the hardest case: the two share one case and differ mainly in "
+             "the front buttons. More real TDS 2014 photos from new places help most.",
+             "The test set (23 images) is still small; test with real Quest camera frames before relying on it.",
              "The 3D models are boxes, so unusual angles are approximate; real photos always beat renders.",
              "Licences: lab photos are internal data; the R&amp;S press images and the CC BY-SA photo must pass "
              "the Leonardo licence check before any use beyond the PoC."])

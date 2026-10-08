@@ -9,9 +9,10 @@ locally on the CPU — no cloud calls, no downloads at runtime.
   It runs two YOLOX-Tiny models: the fine-tuned 3-oscilloscope model (target) and the stock COCO model (context).
 - `training/yolox_tiny_osc3.py` — YOLOX experiment (3 classes, 416×416); `yolox_tiny_rtb2004.py` is the earlier 1-class one.
 - `training/train_cpu.py` — CPU fine-tuning loop (the official YOLOX trainer needs CUDA).
-- `datasets/oscilloscopes3/` — 3-class COCO dataset (`synth/gen3.py`, 80/20 train/validation split of the
-  generated + real-crop images): 3D renders + real cut-outs pasted on
-  bench scenes + 40 real train photos; `test2017` = 12 real photos never used for training.
+- `datasets/oscilloscopes3/` — 3-class dataset (`synth/gen3.py`): 1,812 train / 452 validation (80/20) images built
+  from ~350 labelled real images (64 lab photos + the 2026-10-08 batch of 39 photos and 3 videos) with 3D renders,
+  real cut-outs and crops; `test2017` = 23 real images never used for training (9 from an unseen lab).
+  Formats: COCO (`annotations/`), YOLO (`yolo/`), Pascal VOC (`voc/`) - `tools/export_formats.py`.
 - `raw/` — the lab photos, `photos_manifest.csv` (instrument + session per photo), `real_labels.json` (checked boxes).
 - `tools/` — `draft_real_labels.py` / `finalize_real_labels.py` (labelling), `eval_real.py` (score on real photos),
   `prelabel.py` (Label Studio pre-annotations), `extract_frames.py` (video to frames), `find_duplicates.py`.
@@ -29,17 +30,16 @@ locally on the CPU — no cloud calls, no downloads at runtime.
 | `media/` | 360/3D videos, interactive viewer and the scripts that made them | no |
 | `_archive/` | old copy from karta-ai, kept aside | no |
 
-## Current result (real held-out photos, scored as the app runs: whole photo + tiles, 40% cut-off)
+## Current result (real held-out images, scored as the app runs: whole photo + tiles, 40% cut-off)
 
-14 real photos never used for training (incl. a wide office shot and a far-away bench), 18 instruments:
+| model | test set | right | wrong name | missed | false alarms |
+|---|---|---|---|---|---|
+| v3 | 14 lab photos (18 instruments) | 14 | 4 | 0 | 1 |
+| v3 | 23 images incl. 9 from an unseen lab (35 instruments) | 21 | 7 | 7 | 1 |
+| **v4 (deployed)** | same 23 images | **21** | 9 | **5** | 3 |
 
-| model | right scope + right name | wrong name | missed | false alarms |
-|---|---|---|---|---|
-| v2 (renders + real cut-outs) | 10 | 6 | 2 | 1 |
-| **v3 (+ wide scenes, far/rotated scopes, real crops) - deployed** | **14** | 4 | **0** | 1 |
-
-Known weak spots: TDS 2014 fronts still sometimes named TDS 1002; the wall socket next to the ARCADIA
-bench is flagged as a TDS 1002. More real TDS 2014 front photos and socket hard-negatives are the next fixes.
+v4 (trained on the 2026-10-08 batch, 1,812 training images) equals v3 at 40% and beats it at 30/50/60%
+(22/20/20 vs 21/18/18). Main remaining error: TDS 2014 vs TDS 1002 naming.
 Reproduce: `.venv/Scripts/python tools/eval_app.py models/deploy/yolox_tiny_osc3.pth`
 
 ## Run
