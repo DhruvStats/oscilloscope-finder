@@ -167,3 +167,12 @@ $env:CAPTURE_MODE = "on"; .venv\Scripts\python -m uvicorn server.app:app --host 
 .venv\Scripts\python labelstudio\make_tasks.py --new raw\captures\2026-10-08 --only-new
 $env:LS_TOKEN = "<token>"; .labelstudio-venv\Scripts\python labelstudio\add_tasks.py
 ```
+
+## Optional: Roboflow connector (off by default)
+
+`tools/roboflow_connector.py` (run with `.roboflow-venv`, Roboflow's official SDK in its own environment):
+`status`, `push` (dataset to a Roboflow project, for team labelling or training Roboflow models), `pull`
+(a dataset version edited in Roboflow back into `raw/real_labels.json`), `eval` (score a Roboflow-trained model on
+our 23 real test images with the same metric as `tools/eval_app.py`). Anything that sends images is a dry run
+unless `ROBOFLOW_API_KEY` is set, `ROBOFLOW_UPLOAD_APPROVED=yes` (only after Leonardo approves cloud upload)
+and `--send` is given. Free Roboflow projects are public - use a paid/private workspace for lab photos.
