@@ -251,6 +251,8 @@ def place_hard_negative(canvas, hn):
     # small (room shots) up to large (a speaker right next to the scope)
     w = int(random.uniform(0.03, 0.14) * W) if random.random() < 0.4 else int(random.uniform(0.12, 0.45) * W)
     h = max(4, int(hn.shape[0] * w / hn.shape[1]))
+    if h > 0.9 * H:                      # tall objects (an upright speaker): keep them inside the image
+        w, h = max(4, int(w * 0.9 * H / h)), int(0.9 * H)
     hn = cv2.resize(hn, (w, h), interpolation=cv2.INTER_AREA)
     hn = np.dstack([jitter(hn[..., :3], 0.2, 20), hn[..., 3]])
     return paste(canvas, hn, random.randint(0, W - w), random.randint(0, H - h))
