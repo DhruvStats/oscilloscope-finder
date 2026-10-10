@@ -32,10 +32,10 @@ locally on the CPU — no cloud calls, no downloads at runtime.
 
 ## Mode: "oscilloscope" (default) or exact model
 
-`LABEL_MODE=generic` (default) answers every target as **Oscilloscope** - v6 on the 53-image real test
-(85 scopes, incl. 39 frames from an unseen lab): 73/85 found, 1 false alarm, and **50/50 (100%)** when the scope
+`LABEL_MODE=generic` (default) answers every target as **Oscilloscope** - v7 on the 53-image real test
+(85 scopes, incl. 39 frames from an unseen lab): 77/85 found, 1 false alarm, and **50/50 (100%)** when the scope
 covers at least 3% of the image (the Quest use case). The model guess is in `model_hint`.
-`LABEL_MODE=models` names RTB2004 / TDS 2014 / TDS 1002: 60/85 right (42/50 in the use case); TDS 2014 vs
+`LABEL_MODE=models` names RTB2004 / TDS 2014 / TDS 1002: 67/85 right (43/50 in the use case); TDS 2014 vs
 TDS 1002 naming is still the weak point.
 
 ## Current result (real held-out images, scored as the app runs: whole photo + tiles, 40% cut-off)
@@ -48,12 +48,15 @@ TDS 1002 naming is still the weak point.
 | v4 + Tektronix check | same 23 images | 24 | 6 | 5 | 3 |
 | v5 + Tektronix check | same 23 images | 26 | 4 | 5 | 4 |
 | v5, oscilloscope mode | 53 images incl. 39 unseen-lab frames (85 scopes) | 68 (use case 48/50) | - | 17 | 5 |
-| **v6, oscilloscope mode (deployed)** | same 53 images | **73 (use case 50/50)** | - | 12 | **1** |
+| v6, oscilloscope mode | same 53 images | 73 (use case 50/50) | - | 12 | 1 |
+| **v7, oscilloscope mode (deployed)** | same 53 images | **77 (use case 50/50)** | - | **8** | **1** |
 | v5 + Tektronix check, models mode | same 53 images | 61 (use case 41/50) | 7 | 17 | 5 |
 | v6 + Tektronix check, models mode | same 53 images | 60 (use case 42/50) | 13 | 12 | 1 |
+| v7 + Tektronix check, models mode | same 53 images | 67 (use case 43/50) | 10 | 8 | 1 |
 
 v4 (trained on the 2026-10-08 batch, 1,812 training images) equals v3 at 40% and beats it at 30/50/60%
 (22/20/20 vs 21/18/18). Main remaining error: TDS 2014 vs TDS 1002 naming.
+v7: 10 more epochs from v6 after fixing 11 scopes wrongly labelled "no oscilloscope" (rear, side and close-up views).
 v6: 20 more epochs from v5 with mined hard negatives (speakers, keyboards, posters...) and 25 extra labelled scopes.
 Reproduce: `.venv/Scripts/python tools/eval_app.py models/deploy/yolox_tiny_osc3.pth --generic`
 
