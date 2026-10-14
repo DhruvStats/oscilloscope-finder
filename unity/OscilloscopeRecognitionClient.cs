@@ -25,8 +25,8 @@ namespace LeonardoAR
     public class Detection
     {
         public string class_id;
-        public string label;          // "oscilloscope" (server LABEL_MODE=generic, default) or rs_rtb2004 /
-                                      // tek_tds2014 / tek_tds1002 (LABEL_MODE=models); COCO names otherwise
+        public string label;          // rs_rtb2004 / tek_tds2014 / tek_tds1002 (server LABEL_MODE=models, default)
+                                      // or "oscilloscope" (LABEL_MODE=generic); COCO names otherwise
         public string display_name;
         public float confidence;
         public BBox bbox;
@@ -48,7 +48,7 @@ namespace LeonardoAR
     [Serializable]
     public class ModuleBinding
     {
-        public string label = "oscilloscope";   // or rs_rtb2004 / tek_tds2014 / tek_tds1002 in models mode
+        public string label = "tek_tds2014";    // rs_rtb2004 / tek_tds2014 / tek_tds1002 ("oscilloscope" in generic mode)
         public GameObject arModule;   // AR content to enable when this instrument is recognised
     }
 
@@ -76,7 +76,13 @@ namespace LeonardoAR
         public WebCamTexture webcam;
 
         [Header("AR modules per instrument")]
-        public List<ModuleBinding> modules = new List<ModuleBinding>();
+        public List<ModuleBinding> modules = new List<ModuleBinding>
+        {
+            // one entry per instrument: each one gets its own AR content / 3D model for the pose stage
+            new ModuleBinding { label = "rs_rtb2004" },
+            new ModuleBinding { label = "tek_tds2014" },
+            new ModuleBinding { label = "tek_tds1002" },
+        };
 
         [Header("Events")]
         public RecognitionEvent onRecognition = new RecognitionEvent();

@@ -1,7 +1,10 @@
 """Crops of every Tektronix box for the second-stage classifier (TDS 2014 vs TDS 1002).
 
 Sources (the real test photos are never used):
-  - real labelled photos/frames with split "train" (raw/real_labels.json) - full resolution, the best crops
+  - real labelled photos/frames with split "train" (raw/real_labels.json + raw/label_additions.json) - full
+    resolution, the best crops
+  - frames between labelled video frames (raw/dense_labels.json, tools/densify_video_labels.py) - many more real
+    views (angles, motion blur) of the same instruments
   - datasets/oscilloscopes3 train2017 / val2017 (generated scenes, real cut-outs, renders, crops)
 Real crops from a few sessions go to "val" so the classifier is chosen on real images it has not seen.
 
@@ -47,10 +50,15 @@ def main():
         cv2.imwrite(os.path.join(OUT, sp, cls, name), im, [cv2.IMWRITE_JPEG_QUALITY, 92])
         count[(sp, cls)] = count.get((sp, cls), 0) + 1
 
-    for it in json.load(open(os.path.join(ROOT, "raw", "real_labels.json")))["images"]:
+    adds_p, dense_p = (os.path.join(ROOT, "raw", n) for n in ("label_additions.json", "dense_labels.json"))
+    adds = json.load(open(adds_p)) if os.path.exists(adds_p) else {}
+    dense = json.load(open(dense_p)) if os.path.exists(dense_p) else {}
+    items = json.load(open(os.path.join(ROOT, "raw", "real_labels.json")))["images"]
+    items += [{"file": f, "boxes": bs, "split": "train", "session": "dense_" + f.split("/")[-2]} for f, bs in dense.items()]
+    for it in items:
         if it.get("split") == "test":
             continue
-        boxes = [b for b in it["boxes"] if b["cls"] in TEK and min(b["bbox"][2:]) >= MIN_SIDE]
+        boxes = [b for b in it["boxes"] + adds.get(it["file"], []) if b["cls"] in TEK and min(b["bbox"][2:]) >= MIN_SIDE]
         if not boxes:
             continue
         img = cv2.imread(os.path.join(ROOT, it["file"]))

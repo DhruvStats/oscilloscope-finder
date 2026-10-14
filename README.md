@@ -30,13 +30,16 @@ locally on the CPU — no cloud calls, no downloads at runtime.
 | `media/` | 360/3D videos, interactive viewer and the scripts that made them | no |
 | `_archive/` | old copy from karta-ai, kept aside | no |
 
-## Mode: "oscilloscope" (default) or exact model
+## Mode: exact model (default) or just "oscilloscope"
 
-`LABEL_MODE=generic` (default) answers every target as **Oscilloscope** - v7 on the 53-image real test
-(85 scopes, incl. 39 frames from an unseen lab): 77/85 found, 1 false alarm, and **50/50 (100%)** when the scope
-covers at least 3% of the image (the Quest use case). The model guess is in `model_hint`.
-`LABEL_MODE=models` names RTB2004 / TDS 2014 / TDS 1002: 67/85 right (43/50 in the use case); TDS 2014 vs
-TDS 1002 naming is still the weak point.
+`LABEL_MODE=models` (default) names **RTB2004 / TDS 2014 / TDS 1002**, each in its own colour - the pose stage needs
+the exact model to pick the right 3D model. v7 + Tektronix check on the 53-image real test (85 scopes, incl. 39
+frames from an unseen lab): 67/85 right, **43/50 (86%) when the scope covers at least 3% of the image** (the Quest
+use case), 1 false alarm. Almost all naming errors are one case: the TDS 2014 of the unseen lab, filmed from above at
+an angle, called TDS 1002 - no training session shows a TDS 2014 front from that angle. When the Tektronix check is
+not sure the answer says "(model unclear)" (`model_certain: false`) instead of guessing.
+`LABEL_MODE=generic` answers every target as **Oscilloscope**: 77/85 found, 50/50 (100%) in the use case; the
+model guess is in `model_hint`.
 
 ## Current result (real held-out images, scored as the app runs: whole photo + tiles, 40% cut-off)
 

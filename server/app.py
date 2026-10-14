@@ -14,7 +14,7 @@ Environment (all optional):
   TORCH_THREADS              CPU threads for inference (default: half the cores)
   MAX_UPLOAD_MB              reject larger uploads (default 15)
   TILED_DETECTION=off        only look at the whole photo (faster, but misses small, distant instruments)
-  LABEL_MODE=models          name the exact model instead of just "oscilloscope" (default: generic)
+  LABEL_MODE=generic         answer every scope as just "oscilloscope" (default: models = the exact model)
   TEK_CHECK=off              skip the second-stage TDS 2014 / TDS 1002 classifier (models/deploy/tek_classifier.pth)
   TEK_MIN_CONF               classifier confidence needed to (re)name a Tektronix (default 0.6)
   CONTEXT_TILES=off          everyday objects from the whole photo only (faster)
@@ -218,7 +218,9 @@ class TekClassifier:
         self.classes, self.size = ck["classes"], ck["size"]
         self.mean = np.array(ck["mean"], np.float32)
         self.std = np.array(ck["std"], np.float32)
-        m = torchvision.models.mobilenet_v3_small(weights=None)
+        arch = ck.get("arch", "small")
+        m = (torchvision.models.mobilenet_v3_large if arch == "large" else torchvision.models.mobilenet_v3_small)(
+            weights=None)
         m.classifier[3] = torch.nn.Linear(m.classifier[3].in_features, len(self.classes))
         m.load_state_dict(ck["model"])
         self.model = m.eval()
@@ -268,10 +270,10 @@ def apply_tek_check(img, dets):
 TARGET, CONTEXT = load()
 TEK_PATH = os.environ.get("TEK_CLASSIFIER", os.path.join(ROOT, "models", "deploy", "tek_classifier.pth"))
 TEK_MIN_CONF = float(os.environ.get("TEK_MIN_CONF", "0.6"))
-# LABEL_MODE=generic (default): every target is answered as "oscilloscope" - the reliable part today
-# (86-89% found on real test photos vs ~60% with the exact model). The model guess stays in "model_hint".
-# LABEL_MODE=models: answer with the exact model (rs_rtb2004 / tek_tds2014 / tek_tds1002).
-LABEL_MODE = os.environ.get("LABEL_MODE", "generic").lower()
+# LABEL_MODE=models (default): answer with the exact model (rs_rtb2004 / tek_tds2014 / tek_tds1002), which the
+# pose stage needs to pick the right 3D model. LABEL_MODE=generic: every target is answered as "oscilloscope"
+# and the model guess stays in "model_hint".
+LABEL_MODE = os.environ.get("LABEL_MODE", "models").lower()
 TEK = TekClassifier(TEK_PATH) if TARGET and os.path.exists(TEK_PATH) and     os.environ.get("TEK_CHECK", "on").lower() not in ("off", "0", "false", "no") else None
 app = FastAPI(title="Leonardo AR - oscilloscope finder")
 
