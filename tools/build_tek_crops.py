@@ -23,7 +23,9 @@ OUT = os.path.join(ROOT, "datasets", "tek_crops")
 TEK = ("tek_tds2014", "tek_tds1002")
 PAD = 0.10        # same padding the server uses
 MIN_SIDE = 24     # smaller boxes carry no readable detail
-VAL_SESSIONS = {"batch_2026-10-08_photos", "white_table"}   # real sessions held out for choosing the model
+# real session held out for choosing the model; the batch photos (3 scopes side by side, incl. the shelf scene)
+# are too valuable to leave out of training
+VAL_SESSIONS = {"white_table"}
 
 
 def crop(img, x, y, w, h):
@@ -39,20 +41,26 @@ def crop(img, x, y, w, h):
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--no-dense", action="store_true", help="leave out the densified video frames")
+    ap.add_argument("--out", default=OUT)
+    args = ap.parse_args()
+    OUT_ = args.out
     random.seed(0)
-    shutil.rmtree(OUT, ignore_errors=True)
+    shutil.rmtree(OUT_, ignore_errors=True)
     for sp in ("train", "val"):
         for c in TEK:
-            os.makedirs(os.path.join(OUT, sp, c), exist_ok=True)
+            os.makedirs(os.path.join(OUT_, sp, c), exist_ok=True)
     count = {}
 
     def save(sp, cls, im, name):
-        cv2.imwrite(os.path.join(OUT, sp, cls, name), im, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        cv2.imwrite(os.path.join(OUT_, sp, cls, name), im, [cv2.IMWRITE_JPEG_QUALITY, 92])
         count[(sp, cls)] = count.get((sp, cls), 0) + 1
 
     adds_p, dense_p = (os.path.join(ROOT, "raw", n) for n in ("label_additions.json", "dense_labels.json"))
     adds = json.load(open(adds_p)) if os.path.exists(adds_p) else {}
-    dense = json.load(open(dense_p)) if os.path.exists(dense_p) else {}
+    dense = json.load(open(dense_p)) if os.path.exists(dense_p) and not args.no_dense else {}
     items = json.load(open(os.path.join(ROOT, "raw", "real_labels.json")))["images"]
     items += [{"file": f, "boxes": bs, "split": "train", "session": "dense_" + f.split("/")[-2]} for f, bs in dense.items()]
     for it in items:

@@ -3,85 +3,160 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Oscilloscope finder</title>
+<title>Oscilloscope Finder</title>
 <style>
   :root {
-    --bg: #f6f6f4; --panel: #ffffff; --fg: #1d1d1b; --muted: #6b6a66; --line: #e2e1dc;
-    --accent: #0f9d6b; --accent-ink: #ffffff; --accent-soft: #e3f5ee; --warn: #b4581b; --warn-soft: #fbeee4;
-    --other: #5f7a99; --radius: 10px;
+    --bg: #f3f4f1; --bg2: #e9ebe6; --panel: #ffffff; --fg: #17181a; --muted: #67696e; --line: #dfe1dc;
+    --accent: #0f9d6b; --accent-ink: #ffffff; --accent-soft: #e2f4ec; --warn: #b4581b; --warn-soft: #fbeee4;
+    --other: #5f7a99; --radius: 14px; --shadow: 0 1px 2px rgba(20, 24, 28, .06), 0 8px 24px rgba(20, 24, 28, .06);
+    --screen: #0c1512; --trace: #2fe39a;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #151514; --panel: #1f1f1d; --fg: #ecebe7; --muted: #9b9a95; --line: #33322f;
-      --accent: #2fc68e; --accent-ink: #06291b; --accent-soft: #163a2c; --warn: #f0a46d; --warn-soft: #3a2616; --other: #8fa7c2; }
+    :root:not([data-theme="light"]) { --bg: #0e100f; --bg2: #141716; --panel: #181b1a; --fg: #eceeea; --muted: #9a9d98;
+      --line: #2a2e2c; --accent: #2fd394; --accent-ink: #04261a; --accent-soft: #12332a; --warn: #f0a46d;
+      --warn-soft: #3a2616; --other: #8fa7c2; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3); }
   }
+  :root[data-theme="dark"] { --bg: #0e100f; --bg2: #141716; --panel: #181b1a; --fg: #eceeea; --muted: #9a9d98;
+    --line: #2a2e2c; --accent: #2fd394; --accent-ink: #04261a; --accent-soft: #12332a; --warn: #f0a46d;
+    --warn-soft: #3a2616; --other: #8fa7c2; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3); }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { padding: 20px 24px 8px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  body { margin: 0; background: radial-gradient(1200px 500px at 10% -10%, var(--accent-soft), transparent 60%), var(--bg);
+    color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; min-height: 100vh; }
+
+  /* header: a small oscilloscope screen as the logo */
+  header { padding: 18px 24px 10px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .logo { width: 46px; height: 34px; border-radius: 8px; background: var(--screen); display: grid; place-items: center;
+    box-shadow: inset 0 0 0 2px #2a3a33, var(--shadow); }
+  .logo path { stroke: var(--trace); stroke-width: 2; fill: none; stroke-linecap: round;
+    stroke-dasharray: 90; animation: trace 2.4s linear infinite; filter: drop-shadow(0 0 2px var(--trace)); }
+  @keyframes trace { from { stroke-dashoffset: 90; } to { stroke-dashoffset: -90; } }
+  h1 { font-size: 21px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
   header .sub { color: var(--muted); font-size: 13px; }
-  #health { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .head-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  #health { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+    border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
   #health .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  #health.ok .dot { background: var(--accent); } #health.bad .dot { background: var(--warn); }
-  main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 8px 24px 24px; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 8px 16px 16px; } header { padding: 16px 16px 4px; } }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
-  #stage { position: relative; min-height: 420px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  #drop { position: absolute; inset: 12px; border: 2px dashed var(--line); border-radius: var(--radius); display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 10px; color: var(--muted); text-align: center; padding: 16px; cursor: pointer; }
+  #health.ok .dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  #health.bad .dot { background: var(--warn); }
+  #theme { width: 34px; height: 34px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+
+  /* the three instruments, in their colours */
+  #legend { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 24px 12px; }
+  .chip { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border-radius: 999px; background: var(--panel);
+    border: 1px solid var(--line); font-size: 13px; font-weight: 500; box-shadow: var(--shadow); transition: transform .2s; }
+  .chip .sw { width: 14px; height: 14px; border-radius: 4px; }
+  .chip .n { font-variant-numeric: tabular-nums; min-width: 20px; text-align: center; border-radius: 999px; padding: 0 6px;
+    background: var(--bg2); color: var(--muted); font-size: 12px; }
+  .chip.hit { transform: translateY(-1px); }
+  .chip.hit .n { color: var(--accent-ink); }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding: 0 24px 24px; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; padding: 0 16px 16px; } header { padding: 14px 16px 8px; }
+    #legend { padding: 0 16px 10px; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+
+  #stage { position: relative; min-height: 460px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #drop { position: absolute; inset: 14px; border: 2px dashed var(--line); border-radius: 12px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px; color: var(--muted); text-align: center; padding: 16px; cursor: pointer;
+    transition: background .2s, border-color .2s; }
+  #drop .big { width: 84px; height: 62px; border-radius: 12px; background: var(--screen); display: grid; place-items: center;
+    box-shadow: inset 0 0 0 3px #2a3a33; }
   #drop.over, #stage.over #drop { border-color: var(--accent); background: var(--accent-soft); color: var(--fg); }
-  #drop strong { color: var(--fg); font-size: 16px; }
-  #canvas { max-width: 100%; max-height: 74vh; display: none; }
+  #drop strong { color: var(--fg); font-size: 18px; }
+  #canvas { max-width: 100%; max-height: 76vh; display: none; border-radius: 10px; }
   #stage.has-image #drop { display: none; } #stage.has-image #canvas { display: block; }
-  #busy { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: color-mix(in srgb, var(--panel) 60%, transparent); font-weight: 500; }
+  /* busy: a scan line sweeps the photo */
+  #busy { position: absolute; inset: 0; display: none; align-items: flex-end; justify-content: center; padding-bottom: 18px;
+    background: color-mix(in srgb, var(--panel) 35%, transparent); font-weight: 600; }
+  #busy span { background: var(--panel); padding: 6px 14px; border-radius: 999px; box-shadow: var(--shadow); font-size: 14px; }
+  #busy::before { content: ""; position: absolute; left: 0; right: 0; height: 3px; top: 0;
+    background: linear-gradient(90deg, transparent, var(--trace), transparent); box-shadow: 0 0 18px var(--trace);
+    animation: scan 1.6s ease-in-out infinite alternate; }
+  @keyframes scan { from { top: 4%; } to { top: 96%; } }
   #stage.busy #busy { display: flex; }
-  aside { display: flex; flex-direction: column; gap: 12px; }
-  aside .panel { padding: 14px 16px; }
-  #verdict { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-  #verdict.found { color: var(--accent); } #verdict.none { color: var(--warn); }
+
+  aside { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  aside .panel { padding: 16px; }
+  #verdict { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  #verdict .icon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--bg2);
+    flex: none; font-size: 18px; }
+  #verdict.found { color: var(--accent); } #verdict.found .icon { background: var(--accent-soft); }
+  #verdict.none { color: var(--warn); } #verdict.none .icon { background: var(--warn-soft); }
   #verdict small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+
+  /* one card per instrument found */
+  #cards { display: flex; flex-direction: column; gap: 10px; }
+  .card { display: grid; grid-template-columns: 76px 1fr; gap: 12px; padding: 10px; border-radius: 12px;
+    border: 1px solid var(--line); border-left: 5px solid var(--c); background: var(--bg); animation: pop .25s ease-out both; }
+  @keyframes pop { from { opacity: 0; transform: translateY(4px); } }
+  .card img { width: 76px; height: 56px; object-fit: cover; border-radius: 8px; background: var(--bg2); }
+  .card .t { font-weight: 650; font-size: 14px; line-height: 1.3; }
+  .card .bar { height: 6px; border-radius: 3px; background: var(--bg2); margin: 6px 0 4px; overflow: hidden; }
+  .card .bar i { display: block; height: 100%; background: var(--c); border-radius: 3px; }
+  .card .m { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .pill { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .pill.ok { background: var(--accent-soft); color: var(--accent); }
+  .pill.unsure { background: var(--warn-soft); color: var(--warn); }
+
   .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; font-size: 14px; }
   .row label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-  input[type=range] { width: 120px; accent-color: var(--accent); }
   input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
   .val { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 36px; text-align: right; }
-  button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
+  button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+    border-radius: 10px; padding: 8px 14px; cursor: pointer; transition: transform .1s, box-shadow .2s; }
+  button:hover:not(:disabled) { box-shadow: var(--shadow); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
   button:disabled { opacity: .45; cursor: default; }
   .buttons { display: flex; gap: 8px; flex-wrap: wrap; }
-  h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 6px; text-transform: none; }
-  ul { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow: auto; }
-  li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  h2 { font-size: 12px; font-weight: 700; color: var(--muted); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .06em; }
+  ul { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow: auto; }
+  li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
   li:last-child { border-bottom: 0; }
   li .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 8px; vertical-align: 0; }
-  li.target { font-weight: 600; }
   .meta { font-size: 12px; color: var(--muted); }
   details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
-  details input[type=text] { width: 100%; margin-top: 8px; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
+  details input[type=text] { width: 100%; margin-top: 8px; font: inherit; font-size: 13px; padding: 6px 8px;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
   .error { color: var(--warn); font-size: 13px; margin-top: 6px; }
+  .error:empty { display: none; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Oscilloscope finder</h1>
-  <span class="sub">Upload a photo of a cluttered bench — every oscilloscope is found and marked. <span id="where">Runs locally, nothing leaves this network.</span></span>
-  <span id="health"><span class="dot"></span><span id="healthText">checking server…</span></span>
+  <div class="logo"><svg width="34" height="20" viewBox="0 0 34 20"><path d="M1 10 H7 L9 3 L12 17 L15 6 L18 14 L20 10 H33"/></svg></div>
+  <div>
+    <h1>Oscilloscope Finder</h1>
+    <div class="sub">Finds and names every R&amp;S RTB2004, Tektronix TDS 2014 and TDS 1002 in a photo.
+      <span id="where">Runs locally, nothing leaves this network.</span></div>
+  </div>
+  <div class="head-right">
+    <span id="health"><span class="dot"></span><span id="healthText">checking server…</span></span>
+    <button type="button" id="theme" title="Light / dark">◐</button>
+  </div>
 </header>
+<div id="legend"></div>
 <main>
   <section id="stage" class="panel">
     <div id="drop">
+      <div class="big"><svg width="60" height="34" viewBox="0 0 34 20" class="logo-trace"><path d="M1 10 H7 L9 3 L12 17 L15 6 L18 14 L20 10 H33" style="stroke:var(--trace);stroke-width:1.6;fill:none"/></svg></div>
       <strong>Drop a photo here</strong>
       <span>or click to choose · paste with Ctrl+V · JPEG or PNG</span>
       <button class="primary" type="button" id="pick">Choose image</button>
       <div class="buttons" id="samples" style="justify-content:center; margin-top:6px"></div>
     </div>
     <canvas id="canvas"></canvas>
-    <div id="busy">Looking for oscilloscopes…</div>
+    <div id="busy"><span>Scanning for oscilloscopes…</span></div>
     <input type="file" id="file" accept="image/*" hidden>
   </section>
   <aside>
     <div class="panel">
-      <div id="verdict">No image yet</div>
+      <div id="verdict"><span class="icon">⌁</span><span>No image yet<small>upload a photo to start</small></span></div>
       <div class="error" id="error"></div>
+    </div>
+    <div class="panel" id="cardsPanel" style="display:none">
+      <h2>Instruments</h2>
+      <div id="cards"></div>
     </div>
     <div class="panel">
       <div class="row"><label><input type="checkbox" id="focus" checked> Focus on oscilloscopes</label></div>
@@ -94,15 +169,15 @@
       </div>
     </div>
     <div class="panel">
-      <h2>Detections</h2>
+      <h2>All detections</h2>
       <ul id="list"><li class="meta">—</li></ul>
-      <div class="meta" id="timing"></div>
+      <div class="meta" id="timing" style="margin-top:6px"></div>
     </div>
     <div class="panel">
       <details>
         <summary>Server</summary>
         <input type="text" id="server" placeholder="same origin (this server)">
-        <div class="meta" style="margin-top:6px">Any server with the Leonardo <code>POST /v1/recognitions</code> contract works, e.g. <code>http://192.168.1.20:8001</code>.</div>
+        <div class="meta" style="margin-top:6px">Any server with the Leonardo <code>POST /v1/recognitions</code> contract works, e.g. <code>http://192.168.1.20:8011</code>.</div>
       </details>
     </div>
   </aside>
@@ -111,7 +186,7 @@
 const $ = id => document.getElementById(id);
 const canvas = $('canvas'), ctx = canvas.getContext('2d');
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-let img = null, result = null, fileName = 'image';
+let img = null, result = null, fileName = 'image', CLASSES = [];
 
 const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
                 set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
@@ -119,25 +194,45 @@ $('server').value = store.get('server', '');
 $('server').addEventListener('change', () => { store.set('server', $('server').value.trim()); checkHealth(); });
 const base = () => ($('server').value.trim() || '').replace(/\/$/, '');
 
+// theme toggle (system default, remembered per browser)
+const applyTheme = t => { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; };
+applyTheme(store.get('theme', ''));
+$('theme').onclick = () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark'
+                                                       : matchMedia('(prefers-color-scheme: dark)').matches;
+  const t = dark ? 'light' : 'dark'; applyTheme(t); store.set('theme', t); draw();
+};
+
 async function checkHealth() {
   const h = $('health');
   try {
     const r = await fetch(base() + '/health');
     const j = await r.json();
     const ok = j.status === 'ok';
-    CLASS_COLOURS = Object.fromEntries((j.classes || []).map(c => [c.label, c.colour || '#18c27f']));
+    CLASSES = j.classes || [];
+    CLASS_COLOURS = Object.fromEntries(CLASSES.map(c => [c.label, c.colour || '#18c27f']));
     h.className = ok ? 'ok' : 'bad';
-    $('healthText').textContent = ok ? `${j.inference} · ${j.device}` : (j.inference || 'model unavailable');
+    $('healthText').textContent = ok ? (j.label_mode === 'models' ? 'model recognition ready' : 'oscilloscope finder ready')
+                                     : (j.inference || 'model unavailable');
+    h.title = `${j.inference} · ${j.device}`;
     // the hosted demo runs without the everyday-objects model: hide its controls
-    const ctx = !!j.context_inference;
-    $('othersRow').style.display = ctx ? '' : 'none';
+    $('othersRow').style.display = j.context_inference ? '' : 'none';
     // learning from real use: only offered when the (lab) server has capture switched on
     $('captureRow').style.display = j.capture ? '' : 'none';
     $('report').style.display = j.capture ? '' : 'none';
     if (j.hosted) $('where').textContent = 'Hosted demo: uploaded photos are processed on the demo server and not stored.';
+    legend();
   } catch { h.className = 'bad'; $('healthText').textContent = 'server not reachable'; }
 }
 checkHealth();
+
+function legend(targets = []) {
+  $('legend').innerHTML = CLASSES.map(c => {
+    const n = targets.filter(t => t.label === c.label).length;
+    return `<span class="chip ${n ? 'hit' : ''}"><span class="sw" style="background:${c.colour}"></span>${c.display_name}` +
+           `<span class="n" style="${n ? `background:${c.colour};color:${inkFor(c.colour)}` : ''}">${n}</span></span>`;
+  }).join('');
+}
 
 // accept the Leonardo contract and a few common variants
 function norm(d) {
@@ -145,6 +240,7 @@ function norm(d) {
   const label = d.label || d.class_name || d.name || String(d.class_id ?? d.class ?? 'object');
   const target = d.target ?? /oscillo|rtb|tds|tektronix/i.test(label + ' ' + (d.class_id || ''));
   return { label, name: d.display_name || label, target, conf: d.confidence ?? d.score ?? 0,
+           certain: d.model_certain, check: d.model_check, hint: d.model_hint,
            x: b.x ?? b[0], y: b.y ?? b[1], w: b.width ?? b.w ?? b[2], h: b.height ?? b.h ?? b[3] };
 }
 
@@ -169,7 +265,7 @@ function visible() {
   if (!result) return { targets: [], others: [] };
   const all = result.detections.map(norm);
   // the server already dropped low-confidence boxes (one tested cut-off), so show what it returned
-  const targets = all.filter(d => d.target);
+  const targets = all.filter(d => d.target).sort((a, b) => a.x - b.x);
   let others = $('others').checked ? all.filter(d => !d.target) : [];
   // the generic model often calls the scope a "tv" or "microwave": drop those duplicates
   others = others.filter(o => !targets.some(t => overlapOf(o, t) > 0.5));
@@ -208,26 +304,51 @@ function draw() {
   ctx.globalAlpha = 1;
   targets.forEach(t => {
     const [x, y, w, h] = px(t), c = colourOf(t);
-    ctx.strokeStyle = c.fill; ctx.lineWidth = lw * 2; ctx.strokeRect(x, y, w, h);
+    // rounded corner brackets look like a viewfinder; a thin full outline keeps the box readable
+    ctx.strokeStyle = c.fill; ctx.lineWidth = lw; ctx.strokeRect(x, y, w, h);
+    const k = Math.min(w, h) * 0.22; ctx.lineWidth = lw * 2.6; ctx.lineCap = 'round';
+    [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]].forEach(([cx, cy, sx, sy]) => {
+      ctx.beginPath(); ctx.moveTo(cx, cy + sy * k); ctx.lineTo(cx, cy); ctx.lineTo(cx + sx * k, cy); ctx.stroke();
+    });
     tag(`${t.name}  ${Math.round(t.conf * 100)}%`, x, y, c.fill, c.ink, font);
   });
   render(targets, others);
 }
 
+function thumb(d) {   // a zoomed crop of the instrument for its card
+  const W = img.naturalWidth, H = img.naturalHeight, pad = 0.08;
+  const x = Math.max(0, (d.x - d.w * pad) * W), y = Math.max(0, (d.y - d.h * pad) * H);
+  const w = Math.min(W - x, d.w * (1 + 2 * pad) * W), h = Math.min(H - y, d.h * (1 + 2 * pad) * H);
+  const c = document.createElement('canvas'), s = 160 / Math.max(w, h);
+  c.width = Math.max(1, w * s); c.height = Math.max(1, h * s);
+  c.getContext('2d').drawImage(img, x, y, w, h, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.85);
+}
+
 function render(targets, others) {
   const v = $('verdict');
   if (!result) return;
+  legend(targets);
   if (targets.length) {
     v.className = 'found';
     const names = [...new Set(targets.map(t => t.name))];
-    v.innerHTML = `${targets.length === 1 ? 'Oscilloscope found' : `${targets.length} oscilloscopes found`}<small>${names.join(' · ')}</small>`;
+    v.innerHTML = `<span class="icon">✓</span><span>${targets.length === 1 ? 'Oscilloscope found' : `${targets.length} oscilloscopes found`}<small>${names.join(' · ')}</small></span>`;
   } else {
     v.className = 'none';
-    v.innerHTML = `No oscilloscope found<small>none of the three PoC models is visible clearly enough - try a closer or sharper photo</small>`;
+    v.innerHTML = `<span class="icon">?</span><span>No oscilloscope found<small>none of the three models is visible clearly enough - try a closer or sharper photo</small></span>`;
   }
+  $('cardsPanel').style.display = targets.length ? '' : 'none';
+  $('cards').innerHTML = targets.map((t, i) => {
+    const c = colourOf(t).fill, name = t.name.replace(' (model unclear)', '');
+    const sure = t.certain === false ? '<span class="pill unsure" title="front panel not clearly visible - the exact model may be wrong">model unclear</span>'
+               : t.certain === true ? '<span class="pill ok" title="confirmed by the second-stage model check">model confirmed</span>' : '';
+    return `<div class="card" style="--c:${c}; animation-delay:${i * 60}ms"><img src="${thumb(t)}" alt="">` +
+           `<div><div class="t">${name}</div><div class="bar"><i style="width:${Math.round(t.conf * 100)}%"></i></div>` +
+           `<div class="m">${Math.round(t.conf * 100)}% found ${sure}</div></div></div>`;
+  }).join('');
   const items = [...targets.map(d => ({ ...d, c: colourOf(d).fill })), ...others.map(d => ({ ...d, c: css('--other') }))];
   $('list').innerHTML = items.length ? items.map(d =>
-    `<li class="${d.target ? 'target' : ''}"><span><span class="sw" style="background:${d.c}"></span>${d.target ? d.name : d.label}</span><span class="val">${Math.round(d.conf * 100)}%</span></li>`
+    `<li><span><span class="sw" style="background:${d.c}"></span>${d.target ? d.name : d.label}</span><span class="val">${Math.round(d.conf * 100)}%</span></li>`
   ).join('') : '<li class="meta">nothing above the thresholds</li>';
   $('timing').textContent = result.inference_ms ? `${result.inference_ms} ms on ${result.device || 'server'} · ${result.image?.width}×${result.image?.height}` : '';
   $('download').disabled = false;
@@ -244,7 +365,8 @@ async function analyse(file) {
   result = null;
   $('stage').classList.add('has-image', 'busy');
   canvas.width = img.naturalWidth; canvas.height = img.naturalHeight; ctx.drawImage(img, 0, 0);
-  $('verdict').className = ''; $('verdict').textContent = 'Analysing…';
+  $('verdict').className = ''; $('verdict').innerHTML = '<span class="icon">⌁</span><span>Analysing…<small>detector + model check</small></span>';
+  $('cardsPanel').style.display = 'none';
   try {
     const fd = new FormData();
     fd.append('image', file, file.name || 'upload.jpg');
@@ -257,7 +379,7 @@ async function analyse(file) {
     result = await r.json();
     draw();
   } catch (e) {
-    $('verdict').className = 'none'; $('verdict').textContent = 'Recognition failed';
+    $('verdict').className = 'none'; $('verdict').innerHTML = '<span class="icon">!</span><span>Recognition failed</span>';
     $('error').textContent = e.message;
   } finally { $('stage').classList.remove('busy'); }
 }
@@ -285,7 +407,8 @@ $('drop').onclick = () => $('file').click();
 $('file').onchange = () => { analyse($('file').files[0]); $('file').value = ''; };
 $('another').onclick = () => {
   img = null; result = null; $('stage').classList.remove('has-image');
-  $('verdict').className = ''; $('verdict').textContent = 'No image yet';
+  $('verdict').className = ''; $('verdict').innerHTML = '<span class="icon">⌁</span><span>No image yet<small>upload a photo to start</small></span>';
+  $('cardsPanel').style.display = 'none'; legend();
   $('list').innerHTML = '<li class="meta">—</li>'; $('timing').textContent = ''; $('download').disabled = true;
 };
 const stage = $('stage');
