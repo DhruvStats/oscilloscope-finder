@@ -17,6 +17,7 @@ Environment (all optional):
   LABEL_MODE=generic         answer every scope as just "oscilloscope" (default: models = the exact model)
   TEK_CHECK=off              skip the second-stage TDS 2014 / TDS 1002 classifier (models/deploy/tek_classifier.pth)
   TEK_MIN_CONF               classifier confidence needed to (re)name a Tektronix (default 0.6)
+  DETECTOR_CONFIRM           detector confidence that marks an RTB2004 "model confirmed" (default 0.8)
   CONTEXT_TILES=off          everyday objects from the whole photo only (faster)
   DEMO_PASSWORD              if set, the page and API ask for HTTP basic auth (any user name, this password)
   CAPTURE_MODE=on            lab server only: store unsure frames from opted-in clients and reported photos
@@ -257,7 +258,7 @@ def apply_tek_check(img, dets):
         if cls is None:
             continue
         d["first_stage_label"] = d["label"]
-        d["model_check"] = {"label": cls, "confidence": round(p, 3)}
+        d["model_check"] = {"label": cls, "confidence": round(p, 3), "source": "tektronix_check"}
         if p >= TEK_MIN_CONF:
             d["label"], d["display_name"] = cls, DISPLAY_NAMES.get(cls, cls)
             d["class_id"] = d["class_id"].split(":")[0] + ":" + str(TARGET.names.index(cls))
@@ -265,6 +266,21 @@ def apply_tek_check(img, dets):
         else:
             d["model_certain"] = False
             d["display_name"] = DISPLAY_NAMES.get(d["label"], d["label"]) + " (model unclear)"
+
+
+# Models without a second-stage check (the RTB2004: no look-alike among the targets, never misnamed on the real
+# test) are confirmed by the detector itself when it is confident.
+DETECTOR_CONFIRM = float(os.environ.get("DETECTOR_CONFIRM", "0.8"))
+
+
+def apply_detector_confirm(dets):
+    """model_certain for targets the Tektronix check does not cover (in place)."""
+    for d in dets:
+        if "model_certain" in d or d["label"].startswith("tek_"):
+            continue
+        if d["confidence"] >= DETECTOR_CONFIRM:
+            d["model_certain"] = True
+            d["model_check"] = {"label": d["label"], "confidence": round(d["confidence"], 3), "source": "detector"}
 
 
 TARGET, CONTEXT = load()
@@ -351,6 +367,7 @@ async def recognitions(image: UploadFile = File(...), session_id: str = Form(Non
     candidates = TARGET.detect(img, min(TARGET_MIN_CONF, UNSURE_RANGE[0]), TILES)
     targets = [d for d in candidates if d["confidence"] >= TARGET_MIN_CONF]
     apply_tek_check(img, targets)          # better model names (also used for the hint in generic mode)
+    apply_detector_confirm(targets)
     if LABEL_MODE == "generic":
         for d in targets:
             d["model_hint"] = {"label": d["label"], "display_name": d["display_name"]}

@@ -341,7 +341,9 @@ function render(targets, others) {
   $('cards').innerHTML = targets.map((t, i) => {
     const c = colourOf(t).fill, name = t.name.replace(' (model unclear)', '');
     const sure = t.certain === false ? '<span class="pill unsure" title="front panel not clearly visible - the exact model may be wrong">model unclear</span>'
-               : t.certain === true ? '<span class="pill ok" title="confirmed by the second-stage model check">model confirmed</span>' : '';
+               : t.certain === true ? `<span class="pill ok" title="${t.check?.source === 'detector'
+                   ? 'confirmed by the detector (confident, and this model has no look-alike among the three)'
+                   : 'confirmed by the second-stage Tektronix check (TDS 2014 vs TDS 1002)'}">model confirmed</span>` : '';
     return `<div class="card" style="--c:${c}; animation-delay:${i * 60}ms"><img src="${thumb(t)}" alt="">` +
            `<div><div class="t">${name}</div><div class="bar"><i style="width:${Math.round(t.conf * 100)}%"></i></div>` +
            `<div class="m">${Math.round(t.conf * 100)}% found ${sure}</div></div></div>`;
