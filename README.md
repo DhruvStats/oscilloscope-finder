@@ -34,9 +34,9 @@ locally on the CPU — no cloud calls, no downloads at runtime.
 ## Mode: exact model (default) or just "oscilloscope"
 
 `LABEL_MODE=models` (default) names **RTB2004 / TDS 2014 / TDS 1002**, each in its own colour - the pose stage needs
-the exact model to pick the right 3D model. v7 + Tektronix check on the 53-image real test (85 scopes, incl. 39
-frames from an unseen lab): 67/85 right, **43/50 (86%) when the scope covers at least 3% of the image** (the Quest
-use case), 1 false alarm. Almost all naming errors are one case: the TDS 2014 of the unseen lab, filmed from above at
+the exact model to pick the right 3D model. The deployed detector (weight average of v7, v8 and v9) + Tektronix check
+on the 53-image real test (85 scopes, incl. 39 frames from an unseen lab): 68/85 right, **44/50 (88%) when the scope
+covers at least 3% of the image** (the Quest use case), 2 false alarms. Almost all naming errors are one case: the TDS 2014 of the unseen lab, filmed from above at
 an angle, called TDS 1002 - no training session shows a TDS 2014 front from that angle. When the Tektronix check is
 not sure the answer says "(model unclear)" (`model_certain: false`) instead of guessing.
 `LABEL_MODE=generic` answers every target as **Oscilloscope**: 77/85 found, 50/50 (100%) in the use case; the
@@ -53,7 +53,10 @@ model guess is in `model_hint`.
 | v5 + Tektronix check | same 23 images | 26 | 4 | 5 | 4 |
 | v5, oscilloscope mode | 53 images incl. 39 unseen-lab frames (85 scopes) | 68 (use case 48/50) | - | 17 | 5 |
 | v6, oscilloscope mode | same 53 images | 73 (use case 50/50) | - | 12 | 1 |
-| **v7, oscilloscope mode (deployed)** | same 53 images | **77 (use case 50/50)** | - | **8** | **1** |
+| v7, oscilloscope mode | same 53 images | 77 (use case 50/50) | - | 8 | 1 |
+| v8 / v9 (retrained from v7), models mode | same 53 images | 58 / 64 (use case 41/50 each) | 13 / 10 | 14 / 11 | 2 / 3 |
+| **average of v7+v8+v9 (deployed), models mode** | same 53 images | **68 (use case 44/50)** | 9 | 8 | 2 |
+| average of v7+v8+v9, oscilloscope mode | same 53 images | 77 (use case 50/50) | - | 8 | 2 |
 | v5 + Tektronix check, models mode | same 53 images | 61 (use case 41/50) | 7 | 17 | 5 |
 | v6 + Tektronix check, models mode | same 53 images | 60 (use case 42/50) | 13 | 12 | 1 |
 | v7 + Tektronix check, models mode | same 53 images | 67 (use case 43/50) | 10 | 8 | 1 |

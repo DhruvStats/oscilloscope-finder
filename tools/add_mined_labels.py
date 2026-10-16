@@ -53,8 +53,11 @@ def main():
     json.dump(adds, open(os.path.join(ROOT, "raw", "label_additions.json"), "w"), indent=1)
 
     neg = os.path.join(HN, "neg")
-    shutil.rmtree(neg, ignore_errors=True)
-    os.makedirs(neg)
+    # rebuild the mined crops, but keep hand-picked ones (user_*.jpg: false alarms reported on real photos)
+    os.makedirs(neg, exist_ok=True)
+    for f in os.listdir(neg):
+        if not f.startswith("user_"):
+            os.remove(os.path.join(neg, f))
     for i in NEGATIVES:
         shutil.copy(os.path.join(HN, index[i]["crop"]), os.path.join(neg, index[i]["crop"]))
     cands = {c["id"]: c for c in json.load(open(os.path.join(ROOT, "raw", "review", "candidates.json")))}
