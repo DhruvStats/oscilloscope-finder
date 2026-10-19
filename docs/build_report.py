@@ -119,8 +119,8 @@ def architecture():
     arrow(d, 128 + bw, 151, 256, 151)
     arrow(d, 256 + bw, 151, 384, 151)
     box(d, 128, 20, bw, bh, "Context model", ["YOLOX-Tiny COCO", "laptop, keyboard, ...", "drops scope duplicates"])
-    box(d, 256, 20, bw, bh, "Instrument registry", ["config/instruments.yaml", "names, colours, sizes", "(next: 3D mesh path)"])
-    box(d, 384, 20, W - 384, bh, "Clients", ["Unity AR module per model", "web page (3 colours)", "next: pose stage"],
+    box(d, 256, 20, bw, bh, "Instrument registry", ["config/instruments.yaml", "names, colours, sizes", "labelling + generator"])
+    box(d, 384, 20, W - 384, bh, "Clients", ["Unity AR module per model", "web page (3 colours)", "Render demo"],
         fill=colors.HexColor("#e8eef7"), edge=BLUE)
     arrow(d, 178, 82, 178, 120)
     arrow(d, 306, 82, 306, 120)
@@ -143,14 +143,13 @@ def build():
     st = []
     # ---------------------------------------------------------------- title + summary
     st += [Spacer(1, 18 * mm), P("Recognising laboratory oscilloscopes for an AR assistant", "title"),
-           P("Leonardo AR proof of concept - recognition stage: methods, data, results and next steps", "sub"),
+           P("Leonardo AR proof of concept - recognition stage: methods, data and results", "sub"),
            P("Project report, October 2026", "small"), Spacer(1, 8 * mm)]
     st += img("report_example.jpg", W, "Figure 1. The deployed system on a lab photo: all three instrument models found and "
               "named, each in its own colour (training-set photo, shown for illustration).")
     st += [P("Summary", "h1"),
            P("The goal is a recognition service that tells an augmented-reality application on a Meta Quest 3 <b>which "
-             "oscilloscope the user is looking at</b>, so that the matching AR content and, in the next stage, the "
-             "matching 3D model for 6D pose estimation can be loaded. Three instruments are in scope: the "
+             "oscilloscope the user is looking at</b>, so that the matching AR content can be loaded. Three instruments are in scope: the "
              "<b>Rohde &amp; Schwarz RTB2004</b>, the <b>Tektronix TDS 2014</b> and the <b>Tektronix TDS 1002</b>."),
            P("The system is a two-stage detector: a YOLOX-Tiny object detector, fine-tuned on real lab photos, video "
              "frames and generated scenes, followed by a second-stage classifier that separates the two Tektronix "
@@ -169,13 +168,13 @@ def build():
              "recognition server on the local network and receives, for every instrument in view, its model, a "
              "confidence and a bounding box. Requirements agreed during the project:"),
            *bullets(["<b>Model-level recognition</b> of all three instruments (not just a generic \"oscilloscope\"), "
-                     "because the result selects the geometric model for the pose stage.",
+                     "because each model has its own AR content.",
                      "Robust to clutter: laptops, keyboards, speakers, monitors and other look-alikes must not be "
                      "reported as oscilloscopes.",
                      "On-premise and LAN-only: lab images stay local; a cloud demo exists only for presentation.",
                      "Honest evaluation: train, validation and test kept apart by session; results reported on "
                      "real images never seen in training.",
-                     "Reusable pipeline for future objects (e.g. PCBs, coffee machines)."]), Spacer(1, 6)]
+                     "Reusable pipeline: a new object only needs a registry entry and photos/videos."]), Spacer(1, 6)]
     st += img("report_models.jpg", W, "Figure 2. The three instruments. The two Tektronix models share the same case; "
               "the TDS 2014 has four colour-coded channel columns, the TDS 1002 two.")
 
@@ -220,8 +219,7 @@ def build():
            P("<b>Splits.</b> Generated scenes are split 80/20 into training and validation; 12% of the real training "
              "images (whole video blocks, so neighbouring frames cannot leak) are added to validation. The <b>test "
              "set</b> is 53 real images: 39 frames from a lab video never used for training (the hardest case) and 14 "
-             "lab photos. One dataset per instrument model is also exported (images, one-class labels, crops) for "
-             "per-model work and for the pose stage."),
+             "lab photos. One dataset per instrument model is also exported (images, one-class labels, crops)."),
            P("<b>Label quality.</b> Error analysis repeatedly found labelling mistakes rather than model mistakes: "
              "photos labelled \"no oscilloscope\" that actually showed a rear, side or partly hidden instrument (14 of "
              "16 such images), and unboxed instruments in the background. Each one taught the model that a real "
@@ -300,8 +298,8 @@ def build():
                   ["Labelling", "Label Studio 1.23 with model-proposed boxes; scripts for review sheets"],
                   ["Data generation", "OpenCV-based scene generator, hard-negative mining, COCO / YOLO / VOC export"],
                   ["Hosting", "LAN server (lab); Render (demo); GitHub (code)"],
-                  ["AR client", "Unity (C#) for Meta Quest 3, ONNX export for Unity Sentis"],
-                  ["Pose (planned)", "FoundationPose (NVIDIA), SAM 2 for masks, RGB-D camera"]],
+                  ["AR client", "Unity (C#) for Meta Quest 3, ONNX export for Unity Sentis"]],
+
                  [0.25, 0.75])]
 
     doc = SimpleDocTemplate(OUT, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm,
