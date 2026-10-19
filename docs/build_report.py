@@ -290,37 +290,6 @@ def build():
                   ["Code", "private GitHub repository", "lab photos, labels and checkpoints stay local"]],
                  [0.2, 0.32, 0.48])]
 
-    # ---------------------------------------------------------------- 8 next stage
-    st += [P("8. Next stage: 6D pose with FoundationPose", "h1"),
-           P("The recognised model will select a 3D model for FoundationPose (NVIDIA, CVPR 2024), which estimates "
-             "and then tracks the 6D pose of novel objects without per-object training. A detailed study is in "
-             "<i>docs/FOUNDATIONPOSE_STUDY.md</i>; the key points:"),
-           *bullets(["Inputs: RGB image, <b>metric depth aligned to the RGB image</b>, camera intrinsics, an <b>object "
-                     "mask on the first frame</b> (our box can prompt a segmentation model such as SAM 2), and a "
-                     "metric, textured mesh per instrument.",
-                     "The two Tektronix models share one case, so one mesh with two textures covers both; the RTB2004 "
-                     "needs its own. The recognised label selects the mesh through the instrument registry.",
-                     "Output: a 4 x 4 object-to-camera pose and a score; ~1.3 s for the first estimate and ~32 Hz "
-                     "tracking on an RTX 3090.",
-                     "<b>Main risk:</b> the Quest 3 gives camera images but no depth aligned to them; the PoC should "
-                     "start with an external RGB-D camera, then evaluate stereo depth from the two Quest cameras.",
-                     "Requires an NVIDIA GPU (Linux/Docker). Licence: research/evaluation only (non-commercial)."])]
-
-    # ---------------------------------------------------------------- 9 limitations / next steps
-    st += [P("9. Limitations and next steps", "h1"),
-           *bullets(["<b>Data, not model size, limits model naming.</b> 20-50 new photos or short videos of the "
-                     "TDS 2014 and TDS 1002 fronts from several angles (especially from above), in 2-3 rooms, are the "
-                     "most effective next step.",
-                     "The test set is small (85 instruments, only 6 TDS 1002); a larger test session would give "
-                     "tighter estimates.",
-                     "Rear and side views of the two Tektronix models are physically almost identical; the system "
-                     "reports \"model unclear\" there, and the pose stage should wait for a front view before "
-                     "loading model-specific AR content.",
-                     "Pose stage: build meshes, prove FoundationPose with an RGB-D camera on the RTB2004, then "
-                     "integrate it as an optional server stage and evaluate Quest depth options.",
-                     "The pipeline is object-agnostic: a registry entry plus photos/videos are enough to start a new "
-                     "object such as a PCB or a coffee machine (<i>docs/NEW_OBJECT_KIT.md</i>)."])]
-
     # ---------------------------------------------------------------- appendix
     st += [P("Appendix: components", "h1"),
            table([["Component", "Technology"],
