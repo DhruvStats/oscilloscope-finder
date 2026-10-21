@@ -46,7 +46,9 @@ def main():
     out = os.path.join(out_dir, f"workstation_{stamp}.zip")
 
     files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
-    extra_dirs = ["datasets/oscilloscopes3"]
+    # + pose stage: the instrument meshes, their face textures and the synthetic RGB-D test scenes
+    # (FoundationPose runs on the GPU workstation, see docs/POSE_STAGE.md and pose/gpu/setup_foundationpose.sh)
+    extra_dirs = ["datasets/oscilloscopes3", "models/meshes", "synth/textures", "datasets/pose_test"]
     extra_files = ["models/yolox_tiny.pth", "raw/real_labels.json"]
     for d in extra_dirs:
         for base, _, names in os.walk(os.path.join(ROOT, d)):

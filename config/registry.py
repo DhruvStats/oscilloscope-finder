@@ -24,6 +24,9 @@ def load(path=PATH):
         it.setdefault("sample_weight", 1.0)
         it.setdefault("hints", "")
         it.setdefault("textures", [])
+        it.setdefault("height_mm", None)     # 3D size and mesh: only needed by the pose stage (pose/)
+        it.setdefault("depth_mm", None)
+        it.setdefault("mesh", None)
         for variant in it["textures"]:
             missing = set(FACES) - set(variant)
             if missing:

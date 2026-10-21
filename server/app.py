@@ -18,6 +18,9 @@ Environment (all optional):
   TEK_CHECK=off              skip the second-stage TDS 2014 / TDS 1002 classifier (models/deploy/tek_classifier.pth)
   TEK_MIN_CONF               classifier confidence needed to (re)name a Tektronix (default 0.6)
   DETECTOR_CONFIRM           detector confidence that marks an RTB2004 "model confirmed" (default 0.8)
+  POSE_BACKEND               pose stage: auto (FoundationPose when FOUNDATIONPOSE_DIR + CUDA, else geometric),
+                             foundationpose, geometric (CPU, approximate) or off - see docs/POSE_STAGE.md
+  POSE_MASK                  first-frame mask: auto (SAM 2 if installed, else GrabCut), sam2, grabcut, box
   CONTEXT_TILES=off          everyday objects from the whole photo only (faster)
   DEMO_PASSWORD              if set, the page and API ask for HTTP basic auth (any user name, this password)
   CAPTURE_MODE=on            lab server only: store unsure frames from opted-in clients and reported photos
@@ -331,6 +334,8 @@ def health():
         # Render sets RENDER=true; the page then says photos go to the demo server instead of "runs locally"
         "hosted": bool(os.environ.get("RENDER")),
         "target_checkpoint": os.path.relpath(TARGET.ckpt, ROOT) if TARGET else None,
+        "pose_backend": POSE.backend.name if POSE else None,
+        "pose_error": POSE_ERROR,
     }
 
 
@@ -356,6 +361,16 @@ def _capture(img, reason, detections, note=""):
     return os.path.relpath(os.path.join(folder, stem + ".jpg"), ROOT).replace(os.sep, "/")
 
 
+def recognise(img):
+    """Detector + Tektronix check + detector confirmation -> (all candidates, confident targets)."""
+    # detect down to the "unsure" level, answer only with confident boxes
+    candidates = TARGET.detect(img, min(TARGET_MIN_CONF, UNSURE_RANGE[0]), TILES)
+    targets = [d for d in candidates if d["confidence"] >= TARGET_MIN_CONF]
+    apply_tek_check(img, targets)          # better model names (also used for the hint in generic mode)
+    apply_detector_confirm(targets)
+    return candidates, targets
+
+
 @app.post("/v1/recognitions")
 async def recognitions(image: UploadFile = File(...), session_id: str = Form(None),
                        frame_timestamp_ms: int = Form(None), capture: bool = Form(False)):
@@ -363,11 +378,7 @@ async def recognitions(image: UploadFile = File(...), session_id: str = Form(Non
         raise HTTPException(503, "oscilloscope model weights are not available yet")
     img = await _read_image(image)
     t0 = time.perf_counter()
-    # detect down to the "unsure" level, answer only with confident boxes
-    candidates = TARGET.detect(img, min(TARGET_MIN_CONF, UNSURE_RANGE[0]), TILES)
-    targets = [d for d in candidates if d["confidence"] >= TARGET_MIN_CONF]
-    apply_tek_check(img, targets)          # better model names (also used for the hint in generic mode)
-    apply_detector_confirm(targets)
+    candidates, targets = recognise(img)
     if LABEL_MODE == "generic":
         for d in targets:
             d["model_hint"] = {"label": d["label"], "display_name": d["display_name"]}
@@ -397,6 +408,71 @@ async def recognitions(image: UploadFile = File(...), session_id: str = Form(Non
         "inference_ms": round((time.perf_counter() - t0) * 1000, 1),
         "detections": sorted(targets, key=lambda d: -d["confidence"]) + sorted(context, key=lambda d: -d["confidence"]),
         "captured": bool(captured),
+    }
+
+
+# ---------------------------------------------------------------- pose stage (Recognition -> Pose -> Unity)
+POSE_BACKEND = os.environ.get("POSE_BACKEND", "auto").lower()
+POSE = None
+POSE_ERROR = None
+if POSE_BACKEND != "off":
+    try:
+        from pose.service import PoseService
+        POSE = PoseService(INSTRUMENTS, backend=POSE_BACKEND, mask_method=os.environ.get("POSE_MASK", "auto"),
+                           default_label=os.environ.get("POSE_LABEL") or None)
+    except Exception as e:            # e.g. FoundationPose requested on a machine without CUDA
+        POSE_ERROR = f"{type(e).__name__}: {e}"
+
+
+async def _read_depth(depth, shape, depth_scale):
+    """16-bit PNG (default millimetres) or float32 .npy (metres), same size as the colour image."""
+    raw = await depth.read(MAX_UPLOAD + 1)
+    if raw[1:6] == b"NUMPY":                     # .npy magic: (0x93)NUMPY
+        import io
+        d = np.load(io.BytesIO(raw)).astype(np.float32)
+    else:
+        d = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_UNCHANGED)
+        if d is None:
+            raise HTTPException(400, "depth could not be decoded (16-bit PNG in mm, or .npy in metres)")
+        d = d.astype(np.float32) * depth_scale
+    if d.ndim == 3:
+        d = d[..., 0]
+    if d.shape != shape[:2]:
+        raise HTTPException(400, f"depth is {d.shape[1]}x{d.shape[0]}, the image {shape[1]}x{shape[0]}: "
+                                 "depth must be aligned to the colour image")
+    return d
+
+
+@app.post("/v1/pose")
+async def pose(image: UploadFile = File(...), depth: UploadFile = File(None), session_id: str = Form("default"),
+               frame_timestamp_ms: int = Form(None), fx: float = Form(None), fy: float = Form(None),
+               cx: float = Form(None), cy: float = Form(None), depth_scale: float = Form(0.001),
+               label: str = Form(None), reset: bool = Form(False)):
+    """Recognition + 6D pose of one instrument per session (see docs/POSE_STAGE.md for the contract)."""
+    if TARGET is None:
+        raise HTTPException(503, "oscilloscope model weights are not available yet")
+    if POSE is None:
+        raise HTTPException(503, f"pose stage is off ({POSE_ERROR or 'POSE_BACKEND=off'})")
+    img = await _read_image(image)
+    d = await _read_depth(depth, img.shape, depth_scale) if depth is not None else None
+    from pose import geometry as PG
+    H, W = img.shape[:2]
+    K = PG.intrinsics(fx, fy or fx, cx if cx is not None else W / 2, cy if cy is not None else H / 2) if fx else         PG.default_intrinsics(W, H)
+    t0 = time.perf_counter()
+    _, targets = recognise(img)
+    for t in targets:
+        t["target"] = True
+    result = POSE.process(img, d, K, targets, session_id=session_id or "default", label=label, reset=reset)
+    return {
+        "request_id": str(uuid.uuid4()),
+        "session_id": session_id,
+        "frame_timestamp_ms": frame_timestamp_ms,
+        "image": {"width": W, "height": H},
+        "intrinsics": {"fx": K[0, 0], "fy": K[1, 1], "cx": K[0, 2], "cy": K[1, 2], "guessed": not fx},
+        "depth": d is not None,
+        "detections": sorted(targets, key=lambda t: -t["confidence"]),
+        "pose": result,
+        "total_ms": round((time.perf_counter() - t0) * 1000, 1),
     }
 
 

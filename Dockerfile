@@ -33,6 +33,8 @@ COPY models/deploy ./models/deploy
 ENV TARGET_EXP=yolox_tiny_osc3 \
     TARGET_CKPT=/app/models/deploy/yolox_tiny_osc3.pth \
     CONTEXT_MODEL=on \
-    TORCH_THREADS=1
+    TORCH_THREADS=1 \
+    POSE_BACKEND=off
+# pose stage (pose/, FoundationPose) runs on the LAN GPU server, not in this demo image: docs/POSE_STAGE.md
 EXPOSE 8001
 CMD ["sh", "-c", "uvicorn server.app:app --host 0.0.0.0 --port ${PORT:-8001}"]

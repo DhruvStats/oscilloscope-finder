@@ -24,7 +24,8 @@ locally on the CPU — no cloud calls, no downloads at runtime.
 | `server/`, `web/` | detector API + web page | yes |
 | `training/`, `synth/`, `tools/` | training, dataset generator, labelling/eval tools | yes |
 | `labelstudio/` | Label Studio setup (project "PoC oscilloscopes") | yes (not its database) |
-| `docs/` | guides: `FOUNDATIONPOSE_STUDY.md` (pose stage), `NEW_OBJECT_KIT.md` (reuse for new objects) | yes |
+| `pose/` | pose stage: meshes, masks, FoundationPose / CPU backends, tracking sessions (`POST /v1/pose`) | yes |
+| `docs/` | guides: `POSE_STAGE.md` (Recognition -> FoundationPose -> Unity), `FOUNDATIONPOSE_STUDY.md`, `NEW_OBJECT_KIT.md` | yes |
 | `models/deploy/` | deployed weights | yes |
 | `raw/`, `datasets/`, `models/training/` | photos, labels, generated datasets, checkpoints | no (lab data) |
 | `legacy-yolov8/` | first YOLOv8 + OCR version | code only |

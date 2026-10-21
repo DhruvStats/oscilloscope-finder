@@ -20,6 +20,9 @@ instruments:
     display_name: R&S RTB2004
     colour: "#18c27f"
     width_mm: 390            # real width, keeps relative sizes right when several are pasted together
+    height_mm: 220           # height and depth: datasheet; used for the 3D mesh of the pose stage
+    depth_mm: 152
+    mesh: models/meshes/rs_rtb2004/rs_rtb2004.obj   # metric textured mesh for FoundationPose (tools/build_meshes.py)
     sample_weight: 1.0       # >1 = more training examples (for instruments that are hard to recognise)
     hints: light grey/blue case, large touchscreen, blue hexagon grille at the back
     textures:                # 3D box models: face -> texture file in synth/textures (without .png)
@@ -32,6 +35,9 @@ instruments:
     display_name: Tektronix TDS 2014
     colour: "#ff8a1f"
     width_mm: 326
+    height_mm: 151           # TDS 1000/2000 series datasheet: 323.8 x 151.4 x 124.5 mm (same case as the TDS 1002)
+    depth_mm: 124
+    mesh: models/meshes/tek_tds2014/tek_tds2014.obj
     sample_weight: 1.4       # confused most often with the TDS 1002, and has the fewest real photos
     hints: teal case; front has coloured channel buttons (yellow/blue/pink/green, red MATH) and 5 BNC inputs
     textures:
@@ -42,6 +48,9 @@ instruments:
     display_name: Tektronix TDS 1002
     colour: "#d14bd1"
     width_mm: 324
+    height_mm: 151
+    depth_mm: 124
+    mesh: models/meshes/tek_tds1002/tek_tds1002.obj
     sample_weight: 1.0
     hints: same teal case; grey front buttons, 3 BNC inputs; back has the RS232/Centronics/GPIB module
     textures:
